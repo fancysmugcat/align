@@ -33,7 +33,23 @@ gauge. The code is not a secret; the payload is two angles.
 | --- | --- | --- |
 | `align/<CODE>/reading` | board → site | JSON: `pitch`, `roll`, `battery`, `deviation`, `calibrated`, 10 Hz |
 | `align/<CODE>/status` | board → site | `online` / `offline`, retained, `offline` set as the board's will |
-| `align/<CODE>/cmd` | site → board | JSON: `{"calibrate":true}`, `{"buzzTest":true}`, `{"buzz":2,"threshold":20.5}` |
+| `align/<CODE>/cmd` | site → board | JSON: `{"hello":true}`, `{"calibrate":true}`, `{"buzzTest":true}`, `{"buzz":2,"threshold":20.5}` |
+
+### What the motor tells you
+
+In MQTT a subscriber is invisible to a publisher, so the board has no way of
+knowing anyone is watching — the broker sits in between. The site therefore
+says `{"hello":true}` as soon as it has subscribed, and the board answers on
+the wearer's back:
+
+| Pattern | Meaning |
+| --- | --- |
+| One tap (200 ms) | The board reached the broker. Wi-Fi setup worked — the only feedback there is with no screen nearby. |
+| Two taps | The website is attached and showing *this* board. |
+| One long buzz | Bad posture, after the grace period. Length is the buzz setting. |
+
+Nothing interrupts a pattern mid-play: a posture buzz landing on top of the
+connection tap would read as one long meaningless rumble.
 
 Bluetooth and same-network polling are both still in the site, offered under
 the board code on the home screen. They only work when you run the site
