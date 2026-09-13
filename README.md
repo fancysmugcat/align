@@ -1,10 +1,43 @@
 # ALIGN — website
 
-A static website for the ALIGN posture device. It connects to an ESP32 over
-Web Bluetooth, calibrates against the wearer's upright posture, and tracks how
-far they drift from it over time.
+A static website for the ALIGN posture device. The ESP32 measures the wearer's
+tilt, the site calibrates against their upright posture, and tracks how far
+they drift from it over time.
 
-No build step, no dependencies — plain HTML, CSS and ES modules.
+No build step — plain HTML, CSS and ES modules, plus one vendored script
+(`web/vendor/mqtt.min.js`) for the board connection.
+
+## How the board reaches the site
+
+Once the site is published, the board and the browser can no longer talk
+directly. An `https://` page may not fetch `http://192.168.4.1` — browsers
+block mixed content — and a laptop joined to the board's own hotspot has no
+route to load the page at all. So the board stops waiting to be asked and
+publishes instead:
+
+```
+ESP32-C3  --mqtt/1883-->  broker.emqx.io  <--wss/8084--  the website
+```
+
+Both ends meet at a public MQTT broker. The board's leg is plain TCP; the
+browser's is a secure WebSocket, which an https page is allowed to open. The
+two ends never need to be on the same network, in the same building, or in the
+same country.
+
+Pairing is one six-character code — the last three bytes of the board's MAC,
+printed over serial and on the board's own setup page. Each board gets its own
+topics under `align/<CODE>/`, so two ALIGN boards never land in each other's
+gauge. The code is not a secret; the payload is two angles.
+
+| Topic | Direction | Payload |
+| --- | --- | --- |
+| `align/<CODE>/reading` | board → site | JSON: `pitch`, `roll`, `battery`, `deviation`, `calibrated`, 10 Hz |
+| `align/<CODE>/status` | board → site | `online` / `offline`, retained, `offline` set as the board's will |
+| `align/<CODE>/cmd` | site → board | JSON: `{"calibrate":true}`, `{"buzzTest":true}`, `{"buzz":2,"threshold":20.5}` |
+
+Bluetooth and same-network polling are both still in the site, offered under
+the board code on the home screen. They only work when you run the site
+locally — which is exactly when they're useful.
 
 ## Running it
 
@@ -24,7 +57,12 @@ Any static server works (`npx serve`, `php -S localhost:8000`, nginx…).
 
 Upload the contents of `web/` to any static host — GitHub Pages, Netlify,
 Cloudflare Pages, S3. The only requirement is HTTPS, which all of them give you
-by default.
+by default, and which the board connection needs in order to open its
+WebSocket.
+
+`./deploy.sh` does it for GitHub Pages: it pushes this repository and turns
+Pages on, serving from `web/` on the `gh-pages` branch. Run `gh auth login`
+once first.
 
 ## Browser support
 
@@ -245,11 +283,36 @@ seconds (with a 15 second cooldown). Wiring is documented at the top of the file
 
 | File | What it drives |
 | --- | --- |
+| `firmware/ALIGN_Cloud/ALIGN_Cloud.ino` | **The one to flash.** Joins your Wi-Fi and publishes to the broker, so it reaches the published site from anywhere |
+| `firmware/ALIGN_WiFi/ALIGN_WiFi.ino` | Local-only: runs a web server the site polls across the same network |
+| `firmware/ALIGN_BLE/ALIGN_BLE.ino` | Web Bluetooth. On this ESP32-C3 the stack never reports a client as connected, so notifications are discarded |
 | `firmware/G7Prototype2/G7Prototype2.ino` | The G7 prototype board — LSM6DS3, motor on GPIO 4, I²C on 6/7 |
 | `firmware/align_esp32.ino` | MPU-6050 reference build, with a battery divider and a no-sensor fallback |
 
-Both advertise as `ALIGN` on service `a11c0001-…0001` and send the same 8-byte
-packet, so the website treats them identically.
+### Flashing ALIGN_Cloud
+
+Needs the **SparkFun Qwiic 6DoF - LSM6DS3** and **PubSubClient** libraries.
+Board `ESP32C3 Dev Module`, **USB CDC On Boot: Enabled** — without it `Serial`
+blocks forever waiting for a monitor and the board never gets as far as raising
+its setup hotspot.
+
+```sh
+arduino-cli compile --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc firmware/ALIGN_Cloud
+arduino-cli upload -p /dev/cu.usbmodem14201 --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc firmware/ALIGN_Cloud
+```
+
+On first boot it raises an open hotspot called **ALIGN-setup**. Join it; the
+setup page opens by itself (or visit `http://192.168.4.1`). Pick your 2.4 GHz
+network — the C3 has no 5 GHz radio — type the password, and it saves it to
+flash and rejoins on every boot after that. The page also shows the board code.
+`http://align.local/forget` wipes the saved network and brings the hotspot
+back.
+
+The sketch finds the LSM6DS3 by probing pin pairs rather than trusting a
+constant, and prints which pair answered. The earlier sketches hard-coded SDA 6
+/ SCL 7 and, when that was wrong, quietly fell back to a generated sine wave —
+the gauge moved convincingly while the sensor was never read at all. If no pair
+answers it still says so on every status line rather than pretending.
 
 ## The original iOS app
 
