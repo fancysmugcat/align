@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ALIGN — posture tracker</title>
+<meta name="description" content="Track your posture with the ALIGN wearable. Connects to the ESP32 over Web Bluetooth.">
+<meta name="theme-color" content="#1B6B37">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231B6B37'/%3E%3Cpath d='M14 42a18 18 0 0136 0' fill='none' stroke='%239CCBAA' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="shell">
+    <header class="topbar">
+      <span class="wordmark">ALIGN</span>
+      <div class="topbar-actions" id="topbar-actions">
+        <button id="settings-button" class="icon-button" type="button" aria-label="Settings" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="21" height="21">
+            <path fill="currentColor" fill-rule="evenodd" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.3 7.3 0 0 0-1.7-1L14.4 2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4L9 5.2c-.6.2-1.2.6-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.8 1.7 1l.4 2.6c0 .3.2.4.5.4h4c.3 0 .5-.1.5-.4l.4-2.6c.6-.2 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6L19.4 13ZM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2Z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="page">
+      <div id="cards"></div>
+    </main>
+  </div>
+
+  <div id="overlay-root"></div>
+
+  <!-- Vendored rather than pulled from a CDN so the site keeps working with no
+       third-party host in the chain. Defines the global `mqtt`, which cloud.js
+       uses to subscribe to the board's readings. -->
+  <script src="vendor/mqtt.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+  <noscript><p style="padding:24px;font:16px system-ui">ALIGN needs JavaScript to run.</p></noscript>
+</body>
+</html>

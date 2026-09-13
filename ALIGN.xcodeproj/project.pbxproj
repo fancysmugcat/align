@@ -1,0 +1,348 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 55;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		BF0000000000000000000001 /* ALIGNApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000001 /* ALIGNApp.swift */; };
+		BF0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000002 /* Theme.swift */; };
+		BF0000000000000000000003 /* PostureModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000003 /* PostureModels.swift */; };
+		BF0000000000000000000004 /* PostureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000004 /* PostureStore.swift */; };
+		BF0000000000000000000005 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000005 /* SettingsStore.swift */; };
+		BF0000000000000000000006 /* ALIGNProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000006 /* ALIGNProtocol.swift */; };
+		BF0000000000000000000007 /* DeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000007 /* DeviceManager.swift */; };
+		BF0000000000000000000008 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000008 /* Components.swift */; };
+		BF0000000000000000000009 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000009 /* RootView.swift */; };
+		BF0000000000000000000010 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000010 /* HomeView.swift */; };
+		BF0000000000000000000011 /* StreakCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000011 /* StreakCard.swift */; };
+		BF0000000000000000000012 /* CurrentAngleCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000012 /* CurrentAngleCard.swift */; };
+		BF0000000000000000000013 /* ProgressCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000013 /* ProgressCard.swift */; };
+		BF0000000000000000000014 /* LeanCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000014 /* LeanCard.swift */; };
+		BF0000000000000000000015 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000015 /* SettingsView.swift */; };
+		BF0000000000000000000016 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000016 /* CalibrationView.swift */; };
+		BF0000000000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FE0000000000000000000017 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		FE0000000000000000000001 /* ALIGNApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ALIGNApp.swift; sourceTree = "<group>"; };
+		FE0000000000000000000002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		FE0000000000000000000003 /* PostureModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureModels.swift; sourceTree = "<group>"; };
+		FE0000000000000000000004 /* PostureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureStore.swift; sourceTree = "<group>"; };
+		FE0000000000000000000005 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		FE0000000000000000000006 /* ALIGNProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ALIGNProtocol.swift; sourceTree = "<group>"; };
+		FE0000000000000000000007 /* DeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceManager.swift; sourceTree = "<group>"; };
+		FE0000000000000000000008 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		FE0000000000000000000009 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		FE0000000000000000000010 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		FE0000000000000000000011 /* StreakCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakCard.swift; sourceTree = "<group>"; };
+		FE0000000000000000000012 /* CurrentAngleCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentAngleCard.swift; sourceTree = "<group>"; };
+		FE0000000000000000000013 /* ProgressCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressCard.swift; sourceTree = "<group>"; };
+		FE0000000000000000000014 /* LeanCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeanCard.swift; sourceTree = "<group>"; };
+		FE0000000000000000000015 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FE0000000000000000000016 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
+		FE0000000000000000000017 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FE0000000000000000000018 /* ALIGN.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ALIGN.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9A0000000000000000000022 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		6A0000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				6A0000000000000000000002 /* ALIGN */,
+				6A0000000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6A0000000000000000000002 /* ALIGN */ = {
+			isa = PBXGroup;
+			children = (
+				FE0000000000000000000001 /* ALIGNApp.swift */,
+				FE0000000000000000000002 /* Theme.swift */,
+				6A0000000000000000000003 /* Models */,
+				6A0000000000000000000004 /* Device */,
+				6A0000000000000000000005 /* Views */,
+				FE0000000000000000000017 /* Assets.xcassets */,
+			);
+			path = ALIGN;
+			sourceTree = "<group>";
+		};
+		6A0000000000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				FE0000000000000000000003 /* PostureModels.swift */,
+				FE0000000000000000000004 /* PostureStore.swift */,
+				FE0000000000000000000005 /* SettingsStore.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6A0000000000000000000004 /* Device */ = {
+			isa = PBXGroup;
+			children = (
+				FE0000000000000000000006 /* ALIGNProtocol.swift */,
+				FE0000000000000000000007 /* DeviceManager.swift */,
+			);
+			path = Device;
+			sourceTree = "<group>";
+		};
+		6A0000000000000000000005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				FE0000000000000000000009 /* RootView.swift */,
+				FE0000000000000000000010 /* HomeView.swift */,
+				FE0000000000000000000011 /* StreakCard.swift */,
+				FE0000000000000000000012 /* CurrentAngleCard.swift */,
+				FE0000000000000000000013 /* ProgressCard.swift */,
+				FE0000000000000000000014 /* LeanCard.swift */,
+				FE0000000000000000000015 /* SettingsView.swift */,
+				FE0000000000000000000016 /* CalibrationView.swift */,
+				FE0000000000000000000008 /* Components.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		6A0000000000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FE0000000000000000000018 /* ALIGN.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9A0000000000000000000002 /* ALIGN */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9A0000000000000000000004 /* Build configuration list for PBXNativeTarget "ALIGN" */;
+			buildPhases = (
+				9A0000000000000000000020 /* Sources */,
+				9A0000000000000000000022 /* Frameworks */,
+				9A0000000000000000000021 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ALIGN;
+			productName = ALIGN;
+			productReference = FE0000000000000000000018 /* ALIGN.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9A0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1400;
+				LastUpgradeCheck = 1400;
+				TargetAttributes = {
+					9A0000000000000000000002 = {
+						CreatedOnToolsVersion = 14.0;
+					};
+				};
+			};
+			buildConfigurationList = 9A0000000000000000000003 /* Build configuration list for PBXProject "ALIGN" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 6A0000000000000000000001;
+			productRefGroup = 6A0000000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9A0000000000000000000002 /* ALIGN */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		9A0000000000000000000021 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF0000000000000000000017 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9A0000000000000000000020 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF0000000000000000000001 /* ALIGNApp.swift in Sources */,
+				BF0000000000000000000002 /* Theme.swift in Sources */,
+				BF0000000000000000000003 /* PostureModels.swift in Sources */,
+				BF0000000000000000000004 /* PostureStore.swift in Sources */,
+				BF0000000000000000000005 /* SettingsStore.swift in Sources */,
+				BF0000000000000000000006 /* ALIGNProtocol.swift in Sources */,
+				BF0000000000000000000007 /* DeviceManager.swift in Sources */,
+				BF0000000000000000000008 /* Components.swift in Sources */,
+				BF0000000000000000000009 /* RootView.swift in Sources */,
+				BF0000000000000000000010 /* HomeView.swift in Sources */,
+				BF0000000000000000000011 /* StreakCard.swift in Sources */,
+				BF0000000000000000000012 /* CurrentAngleCard.swift in Sources */,
+				BF0000000000000000000013 /* ProgressCard.swift in Sources */,
+				BF0000000000000000000014 /* LeanCard.swift in Sources */,
+				BF0000000000000000000015 /* SettingsView.swift in Sources */,
+				BF0000000000000000000016 /* CalibrationView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		9A0000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		9A0000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		9A0000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "ALIGN uses Bluetooth to connect to your posture device.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "ALIGN uses Bluetooth to connect to your posture device.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.align.ALIGN;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9A0000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "ALIGN uses Bluetooth to connect to your posture device.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "ALIGN uses Bluetooth to connect to your posture device.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.align.ALIGN;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9A0000000000000000000003 /* Build configuration list for PBXProject "ALIGN" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A0000000000000000000005 /* Debug */,
+				9A0000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9A0000000000000000000004 /* Build configuration list for PBXNativeTarget "ALIGN" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A0000000000000000000007 /* Debug */,
+				9A0000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9A0000000000000000000001 /* Project object */;
+}
