@@ -28,6 +28,10 @@ command -v "$GH" >/dev/null 2>&1 || {
 
 USER_NAME=$("$GH" api user --jq .login)
 
+# Without this, the plain `git push` below has no way to authenticate and sits
+# waiting on a username prompt that never comes.
+"$GH" auth setup-git --hostname github.com
+
 # Create the repository on the first run; afterwards just push to it.
 if ! "$GH" repo view "$USER_NAME/$REPO_NAME" >/dev/null 2>&1; then
   echo "Creating $USER_NAME/$REPO_NAME…"
