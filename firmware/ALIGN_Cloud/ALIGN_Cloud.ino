@@ -324,12 +324,14 @@ String readingJSON() {
 // ---------------------------------------------------------------- mqtt
 
 // Commands are small and fixed in shape, so they are read by hand rather than
-// pulling in a JSON parser for three fields.
-long numberAfter(const String &body, const char *key) {
+// pulling in a JSON parser for three fields. NAN means "the key wasn't there",
+// which is distinct from a real zero — `{"buzz":0}` is how buzzing is turned
+// off, so it has to survive the round trip.
+float numberAfter(const String &body, const char *key) {
   int at = body.indexOf(key);
-  if (at < 0) return LONG_MIN;
+  if (at < 0) return NAN;
   at = body.indexOf(':', at);
-  if (at < 0) return LONG_MIN;
+  if (at < 0) return NAN;
   return body.substring(at + 1).toFloat();
 }
 
@@ -347,21 +349,23 @@ void onCommand(char *topic, byte *payload, unsigned int length) {
     digitalWrite(MOTOR_PIN, HIGH);
   }
 
-  long seconds = numberAfter(body, "\"buzz\"");
-  if (seconds != LONG_MIN) {
+  float seconds = numberAfter(body, "\"buzz\"");
+  if (!isnan(seconds)) {
     if (seconds < 0) seconds = 0;
     if (seconds > 60) seconds = 60;
-    buzzSeconds = (uint8_t)seconds;
+    buzzSeconds = (uint8_t)lround(seconds);
     Serial.print("Buzz set to ");
     Serial.print(buzzSeconds);
     Serial.println("s");
   }
 
   // The site pushes its own bad-posture angle so the vibration and the
-  // on-screen verdict can never disagree.
-  long threshold = numberAfter(body, "\"threshold\"");
-  if (threshold != LONG_MIN && threshold > 0 && threshold < 90) {
-    tiltThreshold = (float)threshold;
+  // on-screen verdict can never disagree. Kept as a float: the site's default
+  // is 20.5 degrees, and rounding it to 20 would make them disagree by half a
+  // degree at exactly the boundary this exists to keep them agreeing on.
+  float threshold = numberAfter(body, "\"threshold\"");
+  if (!isnan(threshold) && threshold > 0 && threshold < 90) {
+    tiltThreshold = threshold;
   }
 }
 
@@ -649,7 +653,10 @@ void startSetupPortal() {
   setupMode = true;
 
   WiFi.persistent(false);
-  WiFi.mode(WIFI_AP);
+  // AP_STA rather than AP: scanning for networks needs a station interface, and
+  // in AP-only mode WiFi.scanNetworks() fails outright — the setup page would
+  // fall back to a bare text box and make you type your SSID from memory.
+  WiFi.mode(WIFI_AP_STA);
   delay(200);
   WiFi.setSleep(false);
 
