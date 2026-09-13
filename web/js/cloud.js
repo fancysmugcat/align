@@ -122,7 +122,16 @@ export class CloudLink {
 
       this.client.on('connect', () => {
         this.client.subscribe([this.topics.reading, this.topics.status], { qos: 0 }, (error) => {
-          if (error) fail(`The broker refused the subscription. ${error.message}`);
+          if (error) {
+            fail(`The broker refused the subscription. ${error.message}`);
+            return;
+          }
+          // Tell the board someone is watching, so it can buzz to confirm.
+          // Nothing else would tell it: the broker sits in between, and a
+          // subscriber is invisible to a publisher in MQTT. Sent on every
+          // connect, so a reconnection after a dropped Wi-Fi confirms itself
+          // the same way the first one did.
+          this.client.publish(this.topics.command, JSON.stringify({ hello: true }), { qos: 0 });
         });
       });
 

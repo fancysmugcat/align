@@ -159,7 +159,6 @@ unsigned long lastPublishMs  = 0;
 unsigned long lastPrintMs    = 0;
 unsigned long badSinceMs     = 0;
 unsigned long lastBuzzMs     = 0;
-unsigned long buzzUntilMs    = 0;
 unsigned long nextMqttTryMs  = 0;
 unsigned long mqttBackoffMs  = 2000;
 unsigned long publishCount   = 0;
@@ -267,13 +266,59 @@ int batteryPercent() {
 
 // ---------------------------------------------------------------- buzzing
 
-// Non-blocking: a delay() here would stall the MQTT keepalive and the web
-// server for the whole length of the buzz.
-void updateBuzz(unsigned long now) {
-  if (buzzUntilMs != 0 && now >= buzzUntilMs) {
+/**
+ * A small pattern player, so the motor can say more than one thing.
+ *
+ * Steps alternate on/off starting with on, in milliseconds — {120,100,120} is
+ * a double tap. All of it is non-blocking: a delay() here would stall the MQTT
+ * keepalive and the web server for the whole length of the buzz, and a dropped
+ * keepalive is how the board falls off the broker mid-buzz.
+ */
+const uint8_t MAX_PATTERN_STEPS = 8;
+uint16_t patternSteps[MAX_PATTERN_STEPS];
+uint8_t patternLength = 0;
+uint8_t patternAt = 0;
+unsigned long patternStepEndsMs = 0;
+
+// Two short taps: the website has attached and is watching this board.
+const uint16_t PATTERN_SITE_CONNECTED[] = { 120, 110, 120 };
+// One short tap: the board itself reached the broker. Confirms Wi-Fi setup
+// worked, before any browser is involved.
+const uint16_t PATTERN_BOARD_ONLINE[]   = { 200 };
+// The "test buzz" from the calibration screen.
+const uint16_t PATTERN_TEST[]           = { 400 };
+
+bool patternRunning() { return patternLength > 0; }
+
+void startPattern(const uint16_t *steps, uint8_t count) {
+  if (count == 0 || count > MAX_PATTERN_STEPS) return;
+  memcpy(patternSteps, steps, count * sizeof(uint16_t));
+  patternLength = count;
+  patternAt = 0;
+  patternStepEndsMs = millis() + patternSteps[0];
+  digitalWrite(MOTOR_PIN, HIGH);         // even steps are on
+}
+
+void updatePattern(unsigned long now) {
+  if (patternLength == 0) return;
+  if (now < patternStepEndsMs) return;
+
+  patternAt++;
+  if (patternAt >= patternLength) {
+    patternLength = 0;
     digitalWrite(MOTOR_PIN, LOW);
-    buzzUntilMs = 0;
+    return;
   }
+  digitalWrite(MOTOR_PIN, (patternAt % 2 == 0) ? HIGH : LOW);
+  patternStepEndsMs = now + patternSteps[patternAt];
+}
+
+void updateBuzz(unsigned long now) {
+  updatePattern(now);
+
+  // Never cut a pattern short — a posture buzz landing on top of the
+  // connection tap would read as one long meaningless rumble.
+  if (patternRunning()) return;
   if (buzzSeconds == 0) return;
   if (!calibrated) return;
 
@@ -292,8 +337,8 @@ void updateBuzz(unsigned long now) {
   lastBuzzMs = now;
   unsigned long duration = (unsigned long)buzzSeconds * 1000UL;
   if (duration > MAX_BUZZ_MS) duration = MAX_BUZZ_MS;
-  buzzUntilMs = now + duration;
-  digitalWrite(MOTOR_PIN, HIGH);
+  uint16_t step = (uint16_t)duration;
+  startPattern(&step, 1);
 }
 
 void calibrateHere() {
@@ -313,7 +358,7 @@ String readingJSON() {
   json += ",\"deviation\":" + String(deviation(), 2);
   json += ",\"calibrated\":" + String(calibrated ? "true" : "false");
   json += ",\"buzzSeconds\":" + String(buzzSeconds);
-  json += ",\"buzzing\":" + String(millis() < buzzUntilMs ? "true" : "false");
+  json += ",\"buzzing\":" + String(patternRunning() ? "true" : "false");
   json += ",\"sensor\":\"" + String(imuPresent ? "lsm6ds3" : "simulated") + "\"";
   json += ",\"code\":\"" + String(boardCode) + "\"";
   json += ",\"uptime\":" + String(millis() / 1000);
@@ -342,11 +387,21 @@ void onCommand(char *topic, byte *payload, unsigned int length) {
   Serial.print("Command: ");
   Serial.println(body);
 
+  // The website says hello as soon as it has subscribed and seen a reading.
+  // Two taps on the wearer's back is the confirmation that the page they are
+  // looking at is showing *this* board — the only way to tell from the device
+  // itself, since the broker sits in between and the board otherwise has no
+  // idea anyone is watching.
+  if (body.indexOf("\"hello\"") >= 0) {
+    Serial.println("The website is watching this board — buzzing to confirm.");
+    startPattern(PATTERN_SITE_CONNECTED,
+                 sizeof(PATTERN_SITE_CONNECTED) / sizeof(PATTERN_SITE_CONNECTED[0]));
+  }
+
   if (body.indexOf("\"calibrate\"") >= 0) calibrateHere();
 
   if (body.indexOf("\"buzzTest\"") >= 0) {
-    buzzUntilMs = millis() + 400;
-    digitalWrite(MOTOR_PIN, HIGH);
+    startPattern(PATTERN_TEST, sizeof(PATTERN_TEST) / sizeof(PATTERN_TEST[0]));
   }
 
   float seconds = numberAfter(body, "\"buzz\"");
@@ -393,6 +448,11 @@ void connectMQTT(unsigned long now) {
     mqtt.publish(topicStatus.c_str(), "online", true);
     mqtt.subscribe(topicCommand.c_str());
     mqttBackoffMs = 2000;
+    // One tap: the board is on the internet and reachable. Worth feeling on
+    // the wearer's back right after Wi-Fi setup, when there is no screen
+    // nearby to say whether it worked.
+    startPattern(PATTERN_BOARD_ONLINE,
+                 sizeof(PATTERN_BOARD_ONLINE) / sizeof(PATTERN_BOARD_ONLINE[0]));
     return;
   }
 
@@ -441,8 +501,7 @@ void handleBuzz() {
 }
 
 void handleBuzzTest() {
-  buzzUntilMs = millis() + 400;
-  digitalWrite(MOTOR_PIN, HIGH);
+  startPattern(PATTERN_TEST, sizeof(PATTERN_TEST) / sizeof(PATTERN_TEST[0]));
   sendJSON(readingJSON());
 }
 
