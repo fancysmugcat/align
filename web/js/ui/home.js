@@ -75,8 +75,13 @@ function connectionBanner(device, actions) {
   const supported = DeviceManager.isSupported;
   const connecting = device.state === DeviceManager.State.connecting;
 
+  // The failed state puts the whole explanation in `device.label`, which the
+  // banner also shows as its title — printing both left the same sentence on
+  // screen twice. The headline stays short and the reason goes underneath it.
+  let title = device.label;
   let detail = 'Enter the six-character code shown on your board to see its angles live.';
   if (device.state === DeviceManager.State.failed && device.errorMessage) {
+    title = 'Board not connected';
     detail = device.errorMessage;
   } else if (supported && device.canShowAllDevices) {
     detail = 'No ALIGN board answered over Bluetooth. Check it is powered and advertising, or pick it from the full list.';
@@ -106,7 +111,7 @@ function connectionBanner(device, actions) {
   const children = [
     icon(Icons.signal, 16),
     h('span', { class: 'banner-copy' }, [
-      h('span', { class: 'banner-title', text: device.label }),
+      h('span', { class: 'banner-title', text: title }),
       h('span', { class: 'banner-detail', text: detail }),
     ]),
     h('div', { class: 'endpoint-row' }, [
