@@ -90,14 +90,20 @@ export function arcPath(cx, cy, r, from, to) {
  * The inverted-U gauge over the silhouette. `angle` is degrees away from the
  * calibrated upright posture — a distance, with no direction in it.
  *
- * The knob fills the arc left to right as that distance grows, the way any
- * progress dial does. It used to start at the top and travel *left*, which on
- * a posture device sitting beside a card called "Left or Right?" got read as
- * "you are leaning left" — reported twice as a bug. Sweeping rightward also
- * uses the whole arc rather than half of it.
+ * The knob rests at the top — upright — and travels the way you lean: right
+ * along the arc for a right lean, left for a left one, with the trail drawn
+ * from the top out to it. Distance from the top is how far you have leaned.
+ *
+ * It began as a one-directional dial reading 0 to max, which on a posture
+ * device sitting beside a card called "Left or Right?" was read as a heading
+ * no matter how it was labelled — first travelling left as the angle grew,
+ * then rightward for both directions. Neither could be right, because the
+ * number driving it had no direction in it. Now the position carries the
+ * direction and the label carries the distance.
  */
-const ARC_START = 180;   // left end of the arc
-const ARC_END = 360;     // right end
+const ARC_START = 180;    // left end of the arc
+const ARC_CENTRE = 270;   // straight up — upright, and where the knob rests
+const ARC_END = 360;      // right end
 
 export function createPostureArc({
   width = 300, arcHeight = 92, lineWidth = 18, maxAngle = 45, showKnob = true,
@@ -133,12 +139,12 @@ export function createPostureArc({
 
   const knob = svg('circle', {
     r: knobRadius, fill: '#FFFFFF', stroke: Theme.zoneGood, 'stroke-width': 2.5,
-    cx: cx - r, cy,
+    cx, cy: cy - r,
     style: { transition: 'stroke .35s linear' },
   });
 
   const label = svg('text', {
-    x: cx - r, y: cy - knobRadius - 10,
+    x: cx, y: cy - r - knobRadius - 10,
     'text-anchor': 'middle', 'dominant-baseline': 'middle',
     fill: Theme.ink, 'font-size': 13, 'font-weight': 600,
   });
@@ -166,6 +172,9 @@ export function createPostureArc({
    */
   let targetAngle = 0;
   let shownAngle = 0;
+  /** Signed lean in degrees: negative is left, positive is right. */
+  let targetLean = 0;
+  let shownLean = 0;
   let zoneNow = PostureZone.good;
   let frame = null;
 
@@ -178,15 +187,21 @@ export function createPostureArc({
     && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function draw() {
-    const progress = Math.min(Math.max(shownAngle / maxAngle, 0), 1);
-    /** Arc degrees: 180 is the left end, 270 straight up, 360 the right end. */
-    const knobDegrees = ARC_START + (ARC_END - ARC_START) * progress;
+    // Position is the *signed* lean, so the knob sits at the top when upright
+    // and travels the way you actually lean. The label and colour stay with
+    // the total distance from upright, which is what "bad posture" is measured
+    // on — slouching forward is just as bad with no lean in it at all.
+    const offset = Math.min(Math.max(shownLean / maxAngle, -1), 1);
+    const knobDegrees = ARC_CENTRE + offset * (ARC_END - ARC_CENTRE);
 
     track.setAttribute('stroke', zoneNow.color);
     if (!showKnob) return;
 
     travelled.setAttribute('stroke', zoneNow.color);
-    travelled.setAttribute('d', progress > 0.02 ? arcPath(cx, cy, r, ARC_START, knobDegrees) : '');
+    // The trail runs from upright to wherever you are, in whichever direction.
+    travelled.setAttribute('d', Math.abs(offset) > 0.02
+      ? arcPath(cx, cy, r, ARC_CENTRE, knobDegrees)
+      : '');
 
     const point = pointOn(cx, cy, r, knobDegrees);
     knob.setAttribute('cx', point.x.toFixed(2));
@@ -204,29 +219,42 @@ export function createPostureArc({
 
   function tick() {
     frame = null;
-    const remaining = targetAngle - shownAngle;
-    if (Math.abs(remaining) <= SETTLED) shownAngle = targetAngle;
-    else {
-      shownAngle += remaining * EASING;
+    const angleLeft = targetAngle - shownAngle;
+    const leanLeft = targetLean - shownLean;
+    const settled = Math.abs(angleLeft) <= SETTLED && Math.abs(leanLeft) <= SETTLED;
+
+    if (settled) {
+      shownAngle = targetAngle;
+      shownLean = targetLean;
+    } else {
+      shownAngle += angleLeft * EASING;
+      shownLean += leanLeft * EASING;
       frame = requestAnimationFrame(tick);
     }
     draw();
   }
 
-  function update(angle, zone) {
+  /**
+   * @param {number} angle How far from upright, always positive.
+   * @param {object} zone Which posture band that falls in.
+   * @param {number} lean Signed roll: negative leans left, positive right.
+   */
+  function update(angle, zone, lean = 0) {
     targetAngle = Number.isFinite(angle) ? angle : 0;
+    targetLean = Number.isFinite(lean) ? lean : 0;
     zoneNow = zone;
 
     if (reduceMotion || !showKnob) {
       shownAngle = targetAngle;
+      shownLean = targetLean;
       draw();
       return;
     }
     if (frame === null) frame = requestAnimationFrame(tick);
   }
 
-  update(0, PostureZone.good);
   shownAngle = 0;
+  shownLean = 0;
   draw();
   return { el, update };
 }
