@@ -87,7 +87,9 @@ function connectionBanner(device, actions) {
   // banner also shows as its title — printing both left the same sentence on
   // screen twice. The headline stays short and the reason goes underneath it.
   let title = device.label;
-  let detail = 'Enter the six-character code shown on your board to see its angles live.';
+  let detail = supported
+    ? 'Pair with your ALIGN board to see its angles live.'
+    : 'Enter the six-character code shown on your board to see its angles live.';
   if (device.state === DeviceManager.State.failed && device.errorMessage) {
     title = 'Board not connected';
     detail = device.errorMessage;
@@ -122,6 +124,45 @@ function connectionBanner(device, actions) {
       h('span', { class: 'banner-title', text: title }),
       h('span', { class: 'banner-detail', text: detail }),
     ]),
+  ];
+
+  // Bluetooth leads, because it is the route that actually works here: it needs
+  // no router, no password and no broker, and on this board the Wi-Fi paths
+  // have never completed a handshake. The other two still exist, one tap away,
+  // rather than crowding the thing the wearer reaches for every time.
+  const primary = [];
+
+  if (supported) {
+    primary.push(h('button', {
+      type: 'button', class: 'pill-button',
+      // On iOS this button only exists because the wearer went and installed a
+      // browser for it, so name the thing that made it possible.
+      text: isIOSBluetoothBrowser() ? `Connect (${IOS_BLUETOOTH_BROWSER.name})` : 'Connect Bluetooth',
+      onClick: () => actions.connect(),
+    }));
+    // The board may advertise a service the site doesn't recognise; this lets
+    // the wearer pick it out of the full list instead.
+    if (device.canShowAllDevices) {
+      primary.push(h('button', {
+        type: 'button', class: 'pill-button pill-button--ghost',
+        text: 'Show all devices',
+        onClick: () => actions.connect({ showAll: true }),
+      }));
+    }
+  }
+
+  primary.push(h('button', {
+    type: 'button', class: 'pill-button pill-button--ghost', text: 'Demo mode', onClick: actions.startDemo,
+  }));
+
+  children.push(h('span', { class: 'banner-actions' }, primary));
+
+  // Wi-Fi, folded away. Nothing here runs unless it is opened and used.
+  const more = h('div', { class: 'banner-more' }, [
+    h('p', {
+      class: 'hint',
+      text: 'Over Wi-Fi the board reaches this page from anywhere, not just from across the room. It needs the board joined to a network first.',
+    }),
     h('div', { class: 'endpoint-row' }, [
       codeField,
       h('button', {
@@ -131,60 +172,30 @@ function connectionBanner(device, actions) {
         onClick: () => actions.connectCloud(codeField.value),
       }),
     ]),
-  ];
-
-  const alternatives = [
     h('button', {
       type: 'button', class: 'pill-button pill-button--ghost',
-      text: 'Same network',
+      text: 'Same network instead',
       title: "Poll the board's own web server. Only works when this page is served over http on the same network as the board.",
       disabled: connecting,
       onClick: () => actions.connectWiFi(),
     }),
-  ];
+  ]);
+  more.hidden = !connecting;   // stays open while an attempt it started runs
 
-  if (supported) {
-    alternatives.push(h('button', {
-      type: 'button', class: 'pill-button pill-button--ghost',
-      // On iOS this button only exists because the wearer went and installed a
-      // browser for it, so name the thing that made it possible.
-      text: isIOSBluetoothBrowser() ? `Bluetooth (${IOS_BLUETOOTH_BROWSER.name})` : 'Bluetooth',
-      disabled: connecting,
-      onClick: () => actions.connect(),
-    }));
-    // The board may advertise a service the site doesn't recognise; this lets
-    // the wearer pick it out of the full list instead.
-    if (device.canShowAllDevices) {
-      alternatives.push(h('button', {
-        type: 'button', class: 'pill-button pill-button--ghost',
-        text: 'Show all devices',
-        onClick: () => actions.connect({ showAll: true }),
-      }));
-    }
-  }
+  const toggle = h('button', {
+    type: 'button', class: 'link-button',
+    text: more.hidden ? 'Connect over Wi-Fi instead' : 'Hide Wi-Fi options',
+    onClick: () => {
+      more.hidden = !more.hidden;
+      toggle.textContent = more.hidden ? 'Connect over Wi-Fi instead' : 'Hide Wi-Fi options';
+    },
+  });
 
-  alternatives.push(h('button', {
-    type: 'button', class: 'pill-button pill-button--ghost', text: 'Demo mode', onClick: actions.startDemo,
-  }));
-
-  children.push(h('span', { class: 'banner-actions' }, alternatives));
-
-  // Without this, an iPhone just shows no Bluetooth button and no reason —
-  // indistinguishable from the feature being broken.
-  if (!supported && isIOS()) {
-    children.push(h('p', { class: 'hint hint--ios' }, [
-      'Safari has no Bluetooth — Apple requires every iPhone browser to use '
-      + "Safari's engine, so Chrome and Firefox here can't either. Use the board "
-      + 'code above, or open this page in ',
-      h('a', {
-        href: IOS_BLUETOOTH_BROWSER.url,
-        target: '_blank',
-        rel: 'noopener',
-        text: IOS_BLUETOOTH_BROWSER.name,
-      }),
-      ' — a free browser that adds Bluetooth to iOS — and the button appears.',
-    ]));
-  }
+  // On iOS with no Bluetooth at all, Wi-Fi is the only route left, so it is not
+  // hidden behind a disclosure the wearer has no alternative to opening.
+  if (!supported) more.hidden = false;
+  else children.push(toggle);
+  children.push(more);
 
   return h('div', { class: 'banner banner--connect' }, children);
 }
