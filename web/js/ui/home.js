@@ -259,7 +259,7 @@ function createAngleCard(posture, device) {
   // off upright, combining slouch and lean, never which way.
   const el = card({
     title: 'Current Angle',
-    subtitle: 'How far from your upright baseline — “Left or Right?” shows which way',
+    subtitle: 'Rests at the top when you are upright, and follows the way you lean',
   }, [gauge, verdict]);
 
   function isLive() {
@@ -271,8 +271,12 @@ function createAngleCard(posture, device) {
     const angle = live ? posture.currentAngle : 0;
     const zone = live ? posture.currentZone : PostureZone.good;
 
+    // Signed roll drives which way the knob goes; it is already relative to
+    // the calibrated upright.
+    const lean = live && posture.current ? posture.current.roll : 0;
+
     gauge.classList.toggle('gauge--idle', !live);
-    arc.update(angle, zone);
+    arc.update(angle, zone, lean);
 
     dot.style.background = live ? zone.color : Theme.track;
     title.textContent = live

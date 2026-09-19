@@ -219,7 +219,13 @@ void mpuReadTilt(float &pitchDeg, float &rollDeg) {
 
   float axg = ax / 16384.0f, ayg = ay / 16384.0f, azg = az / 16384.0f;
   pitchDeg = atan2f(-axg, sqrtf(ayg * ayg + azg * azg)) * 180.0f / PI;
-  rollDeg  = atan2f(ayg, azg) * 180.0f / PI;
+
+  // Negated: as this MPU-6050 is mounted, atan2(ay, az) runs positive when the
+  // wearer leans left, and the site's whole convention is positive = right.
+  // Without this, leaning right reported left and vice versa. Which way the
+  // sensor faces is the only thing that decides this sign, so it belongs here
+  // at the source rather than being undone again in the website.
+  rollDeg  = -atan2f(ayg, azg) * 180.0f / PI;
 }
 
 void readTilt() {
