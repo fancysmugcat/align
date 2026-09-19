@@ -242,7 +242,14 @@ function createAngleCard(posture, device) {
     h('div', { class: 'verdict-copy' }, [title, detail]),
   ]);
 
-  const el = card({ title: 'Current Angle' }, [gauge, verdict]);
+  // "Current Angle" alone reads as a direction on a device whose other card is
+  // called "Left or Right?" — and the needle sweeping leftward as the number
+  // grows makes that reading almost irresistible. It is a distance: how far
+  // off upright, combining slouch and lean, never which way.
+  const el = card({
+    title: 'Current Angle',
+    subtitle: 'How far from your upright baseline — see “Left or Right?” for direction',
+  }, [gauge, verdict]);
 
   function isLive() {
     return posture.isCalibrated && device.isUsable && posture.current !== null;
