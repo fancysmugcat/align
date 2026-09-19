@@ -259,7 +259,7 @@ function createAngleCard(posture, device) {
   // off upright, combining slouch and lean, never which way.
   const el = card({
     title: 'Current Angle',
-    subtitle: 'How far from your upright baseline — see “Left or Right?” for direction',
+    subtitle: 'How far from your upright baseline — “Left or Right?” shows which way',
   }, [gauge, verdict]);
 
   function isLive() {
