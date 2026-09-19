@@ -741,3 +741,17 @@ body.signed-out .topbar-actions { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .lean-live-marker { transition: none; }
 }
+
+/* Wi-Fi options, folded away under the Bluetooth button. Kept in the flow
+   rather than in a sheet so opening it doesn't lose the wearer's place. */
+.banner-more {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(27, 107, 55, .18);
+}
+.banner-more .pill-button { align-self: flex-start; }
+.banner--connect .link-button { font-size: 12px; }

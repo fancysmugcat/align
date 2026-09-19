@@ -186,10 +186,15 @@ export class DeviceManager {
     const fromURL = codeFromLocation();
     if (fromURL) this.cloudCode = fromURL;
 
-    // The cloud comes first: it needs no permission prompt and no user
-    // gesture, so a board that is already publishing simply appears.
-    if (isValidCode(this.cloudCode)) {
-      const connected = await this.connectCloud(this.cloudCode, { quiet: true });
+    // Only a code in the address bar starts a connection by itself.
+    //
+    // This used to fire for a remembered code too, which meant every single
+    // page load spent twelve seconds waiting for a board that wasn't
+    // publishing, with every button — Bluetooth included — disabled for the
+    // duration. An automatic attempt at a route the wearer didn't choose must
+    // never hold up the one they did.
+    if (fromURL) {
+      const connected = await this.connectCloud(fromURL, { quiet: true });
       if (connected) return;
     }
 
@@ -238,6 +243,10 @@ export class DeviceManager {
     }
 
     this.stopDemo();
+    // Pressing Bluetooth means Bluetooth. Any cloud attempt still in flight is
+    // abandoned rather than left to finish and overwrite this one.
+    this.closeCloud();
+    this.stopPolling();
     this.canShowAllDevices = showAll ? false : this.canShowAllDevices;
     this.setState(DeviceManager.State.connecting);
 
