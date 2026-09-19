@@ -157,7 +157,9 @@ export function createPostureArc({
 
     label.setAttribute('x', point.x.toFixed(2));
     label.setAttribute('y', (point.y - knobRadius - 10).toFixed(2));
-    label.textContent = `${Math.round(angle)}°`;
+    // "54° off" rather than "54°": the bare number next to a leftward-swinging
+    // needle was being read as a heading.
+    label.textContent = `${Math.round(angle)}° off`;
     el.setAttribute('aria-label', `${Math.round(angle)} degrees from upright`);
   }
 
