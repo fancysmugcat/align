@@ -11,6 +11,36 @@ import {
 const CLOUD_CODE_KEY = 'align.cloudCode';
 
 /**
+ * True on iPhone and iPad.
+ *
+ * Worth singling out because iOS is the one platform where "use a different
+ * browser" is not advice that works: Apple requires every browser on it to run
+ * WebKit, so Chrome and Firefox there are Safari underneath and none of them
+ * has Web Bluetooth. The only way onto BLE is an app that ships its own
+ * implementation, so the site says that rather than silently hiding the
+ * button.
+ *
+ * iPadOS reports itself as a Mac, so touch points are what separate them.
+ */
+export function isIOS() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent ?? '';
+  if (/iPhone|iPod/.test(ua)) return true;
+  return /iPad/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1);
+}
+
+/** A browser that added Web Bluetooth to iOS itself, e.g. Bluefy. */
+export function isIOSBluetoothBrowser() {
+  return isIOS() && typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+}
+
+/** Where to get one. Free, and the one most reliably kept up to date. */
+export const IOS_BLUETOOTH_BROWSER = {
+  name: 'Bluefy',
+  url: 'https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055',
+};
+
+/**
  * Talks to the ALIGN ESP32.
  *
  * Three ways in, in the order the site offers them:
