@@ -37,9 +37,10 @@
  * a 2.4 GHz radio only, so pick a 2.4 GHz network.
  *
  * Board:   ESP32-C3 development board (ESP32C3 Dev Module in Arduino IDE)
- * Sensor:  LSM6DS3 at 0x6B — SparkFun LSM6DS3 library
+ * Sensor:  MPU-6050 (0x68/0x69) or LSM6DS3 (0x6A/0x6B) — whichever answers.
+ *          The pins are probed too, so nothing here has to be kept in sync
+ *          with how the board is actually soldered.
  * Motor:   GPIO 4
- * I²C:     SDA GPIO 6, SCL GPIO 7
  *
  * Libraries: SparkFun LSM6DS3 Breakout, PubSubClient
  *
@@ -88,7 +89,7 @@ const unsigned long WIFI_TIMEOUT_MS = 20000;
 
 const int MOTOR_PIN = 4;
 
-// Where the LSM6DS3 is wired. The previous sketches hard-coded 6/7 and, when
+// Where the IMU is wired. The previous sketches hard-coded 6/7 and, when
 // that was wrong, quietly fell back to a generated sine wave — the gauge moved
 // convincingly while the sensor was never read at all. So the pins are probed
 // instead: every plausible pair is tried until one answers at the IMU's
@@ -105,11 +106,28 @@ const I2CPins I2C_CANDIDATES[] = {
   {20, 21},   // the classic ESP32 pair, on boards that expose them
 };
 
-// SDO/SA0 low gives 0x6A, high gives 0x6B. Both are tried.
-const uint8_t IMU_ADDRESSES[] = { 0x6B, 0x6A };
+// Two different sensors have been on this hardware. The LSM6DS3 the ALIGN
+// prototypes were built around answers at 0x6A/0x6B (SDO low/high); the
+// MPU-6050 actually soldered to this board answers at 0x68/0x69 (AD0 low/high)
+// and is a completely different chip with different registers. Probing only
+// for the LSM6DS3 is why the sensor read as absent while it was working fine.
+enum ImuKind { IMU_NONE, IMU_LSM6DS3, IMU_MPU6050 };
+
+struct ImuCandidate {
+  uint8_t address;
+  uint8_t whoAmIRegister;
+  ImuKind kind;
+};
+const ImuCandidate IMU_CANDIDATES[] = {
+  { 0x68, 0x75, IMU_MPU6050 },   // WHO_AM_I reads back 0x68 (clones vary)
+  { 0x69, 0x75, IMU_MPU6050 },
+  { 0x6B, 0x0F, IMU_LSM6DS3 },   // WHO_AM_I reads 0x69, or 0x6A on the TR-C
+  { 0x6A, 0x0F, IMU_LSM6DS3 },
+};
 
 int sdaPin = 6, sclPin = 7;
-uint8_t imuAddress = 0x6B;
+uint8_t imuAddress = 0x68;
+ImuKind imuKind = IMU_NONE;
 
 // An ADC pin on a battery divider, or -1 to report "unknown".
 const int BATTERY_PIN = -1;
@@ -185,11 +203,13 @@ void makeBoardCode() {
 // ---------------------------------------------------------------- sensor
 
 /**
- * Finds the IMU by trying each candidate pin pair in turn.
+ * Finds the IMU by trying each candidate pin pair in turn, for either sensor.
  *
  * An address that ACKs is not proof on its own — a floating pin pair can ACK
- * anything — so the WHO_AM_I register is read too. The LSM6DS3 answers 0x69
- * and the LSM6DS3TR-C variant 0x6A, and nothing else on these boards does.
+ * anything — so WHO_AM_I is read as well. Its value is logged but not required
+ * to match: MPU-6050 clones report 0x70, 0x72, 0x75 and 0x98 as readily as the
+ * genuine 0x68, and rejecting those would put us right back to calling a
+ * working sensor absent.
  */
 bool findIMU() {
   for (const I2CPins &pins : I2C_CANDIDATES) {
@@ -200,27 +220,64 @@ bool findIMU() {
     Wire.setClock(100000);
     delay(20);
 
-    for (uint8_t address : IMU_ADDRESSES) {
-      Wire.beginTransmission(address);
+    for (const ImuCandidate &candidate : IMU_CANDIDATES) {
+      Wire.beginTransmission(candidate.address);
       if (Wire.endTransmission() != 0) continue;
 
-      Wire.beginTransmission(address);
-      Wire.write(0x0F);                       // WHO_AM_I
+      Wire.beginTransmission(candidate.address);
+      Wire.write(candidate.whoAmIRegister);
       if (Wire.endTransmission(false) != 0) continue;
-      if (Wire.requestFrom((int)address, 1) != 1) continue;
+      if (Wire.requestFrom((int)candidate.address, 1) != 1) continue;
 
       uint8_t who = Wire.read();
-      Serial.printf("  I2C device at 0x%02X on SDA %d / SCL %d, WHO_AM_I 0x%02X\n",
-                    address, pins.sda, pins.scl, who);
-      if (who != 0x69 && who != 0x6A) continue;
+      Serial.printf("  %s at 0x%02X on SDA %d / SCL %d, WHO_AM_I 0x%02X\n",
+                    candidate.kind == IMU_MPU6050 ? "MPU-6050" : "LSM6DS3",
+                    candidate.address, pins.sda, pins.scl, who);
 
       sdaPin = pins.sda;
       sclPin = pins.scl;
-      imuAddress = address;
+      imuAddress = candidate.address;
+      imuKind = candidate.kind;
       return true;
     }
   }
   return false;
+}
+
+// ---------------------------------------------------------------- MPU-6050
+
+void mpuWrite(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(imuAddress);
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
+
+bool mpuBegin() {
+  mpuWrite(0x6B, 0x00);   // wake up — it boots into sleep
+  mpuWrite(0x1C, 0x00);   // accel +/- 2g
+  mpuWrite(0x1B, 0x00);   // gyro +/- 250 deg/s
+  delay(20);
+  return true;
+}
+
+// Accelerometer only, to match the LSM6DS3 path and the gauge's expectations.
+// The gyro is read and discarded rather than fused: a complementary filter
+// needs a reliable dt, and this loop's is whatever the web server and MQTT
+// keepalive leave behind.
+void mpuReadTilt(float &pitchDeg, float &rollDeg) {
+  Wire.beginTransmission(imuAddress);
+  Wire.write(0x3B);
+  if (Wire.endTransmission(false) != 0) return;
+  if (Wire.requestFrom((int)imuAddress, 6) < 6) return;
+
+  int16_t ax = Wire.read() << 8 | Wire.read();
+  int16_t ay = Wire.read() << 8 | Wire.read();
+  int16_t az = Wire.read() << 8 | Wire.read();
+
+  float axg = ax / 16384.0f, ayg = ay / 16384.0f, azg = az / 16384.0f;
+  pitchDeg = atan2f(-axg, sqrtf(ayg * ayg + azg * azg)) * 180.0f / PI;
+  rollDeg  = atan2f(ayg, azg) * 180.0f / PI;
 }
 
 // Pitch and roll in degrees, from the accelerometer alone.
@@ -236,12 +293,17 @@ void readTilt() {
     return;
   }
 
-  float ax = imu->readFloatAccelX();
-  float ay = imu->readFloatAccelY();
-  float az = imu->readFloatAccelZ();
+  float pitchDeg = pitch, rollDeg = roll;
 
-  float pitchDeg = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
-  float rollDeg  = atan2(ay, az) * 180.0 / PI;
+  if (imuKind == IMU_MPU6050) {
+    mpuReadTilt(pitchDeg, rollDeg);
+  } else {
+    float ax = imu->readFloatAccelX();
+    float ay = imu->readFloatAccelY();
+    float az = imu->readFloatAccelZ();
+    pitchDeg = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
+    rollDeg  = atan2(ay, az) * 180.0 / PI;
+  }
 
   pitch = SMOOTHING * pitch + (1 - SMOOTHING) * pitchDeg;
   roll  = SMOOTHING * roll  + (1 - SMOOTHING) * rollDeg;
@@ -359,7 +421,7 @@ String readingJSON() {
   json += ",\"calibrated\":" + String(calibrated ? "true" : "false");
   json += ",\"buzzSeconds\":" + String(buzzSeconds);
   json += ",\"buzzing\":" + String(patternRunning() ? "true" : "false");
-  json += ",\"sensor\":\"" + String(imuPresent ? "lsm6ds3" : "simulated") + "\"";
+  json += ",\"sensor\":\"" + String(!imuPresent ? "simulated" : (imuKind == IMU_MPU6050 ? "mpu6050" : "lsm6ds3")) + "\"";
   json += ",\"code\":\"" + String(boardCode) + "\"";
   json += ",\"uptime\":" + String(millis() / 1000);
   json += "}";
@@ -560,7 +622,7 @@ void handleSetupRoot() {
 
   html += "<p style='font-size:12px'>Pitch <b>" + String(pitch, 1) + "&deg;</b> &nbsp; ";
   html += "Roll <b>" + String(roll, 1) + "&deg;</b> &nbsp; sensor: ";
-  html += String(imuPresent ? "LSM6DS3" : "simulated") + "</p>";
+  html += String(!imuPresent ? "simulated" : (imuKind == IMU_MPU6050 ? "MPU-6050" : "LSM6DS3")) + "</p>";
   html += "</body></html>";
 
   server.send(200, "text/html", html);
@@ -614,7 +676,7 @@ void handleRoot() {
   html += "</p><p>Wi-Fi: <b>" + WiFi.SSID() + "</b> at " + WiFi.localIP().toString() + "</p>";
   html += "<p>Broker: <b>" + String(mqtt.connected() ? "connected" : "not connected") + "</b>, ";
   html += String(publishCount) + " readings sent</p>";
-  html += "<p>Sensor: " + String(imuPresent ? "LSM6DS3" : "simulated") + "</p></div>";
+  html += "<p>Sensor: " + String(!imuPresent ? "simulated" : (imuKind == IMU_MPU6050 ? "MPU-6050" : "LSM6DS3")) + "</p></div>";
 
   html += "<p style='font-size:12px'><a href='/reading'>/reading</a> &nbsp; ";
   html += "<a href='/calibrate'>/calibrate</a> &nbsp; <a href='/buzz-test'>/buzz-test</a> &nbsp; ";
@@ -768,16 +830,21 @@ void setup() {
   pinMode(MOTOR_PIN, OUTPUT);
   digitalWrite(MOTOR_PIN, LOW);
 
-  Serial.println("Looking for the LSM6DS3...");
+  Serial.println("Looking for an IMU (MPU-6050 or LSM6DS3)...");
   if (findIMU()) {
-    imu = new LSM6DS3(I2C_MODE, imuAddress);
-    imuPresent = (imu->begin() == 0);
+    if (imuKind == IMU_MPU6050) {
+      imuPresent = mpuBegin();
+    } else {
+      imu = new LSM6DS3(I2C_MODE, imuAddress);
+      imuPresent = (imu->begin() == 0);
+    }
   }
   if (imuPresent) {
-    Serial.printf("LSM6DS3 ready at 0x%02X on SDA %d / SCL %d: streaming real tilt.\n",
+    Serial.printf("%s ready at 0x%02X on SDA %d / SCL %d: streaming real tilt.\n",
+                  imuKind == IMU_MPU6050 ? "MPU-6050" : "LSM6DS3",
                   imuAddress, sdaPin, sclPin);
   } else {
-    Serial.println("LSM6DS3 not found on any candidate pin pair — streaming a demo sweep.");
+    Serial.println("No IMU found on any candidate pin pair — streaming a demo sweep.");
     Serial.println("  Check 3V3, GND, SDA and SCL, then add the pair to I2C_CANDIDATES.");
   }
 
