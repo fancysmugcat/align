@@ -1,5 +1,5 @@
 import { BUZZ_INTERVALS, buzzLabel, buzzDetail } from '../models.js';
-import { DeviceManager } from '../device.js';
+import { DeviceManager, isIOS, IOS_BLUETOOTH_BROWSER } from '../device.js';
 import { SheetSync } from '../sync.js';
 import { initials } from '../stores/profile.js';
 import { Theme } from '../theme.js';
@@ -174,7 +174,9 @@ function deviceCard({ device, posture, actions, close }) {
       class: 'hint',
       text: DeviceManager.isSupported
         ? 'Bluetooth and same-network pairing are also offered on the home screen, for running this site locally.'
-        : 'This browser has no Web Bluetooth, which only matters for local pairing — the board code works everywhere.',
+        : isIOS()
+          ? `Safari has no Bluetooth, and every iPhone browser is required to use Safari's engine. The board code works here; ${IOS_BLUETOOTH_BROWSER.name} from the App Store adds Bluetooth if you want it.`
+          : 'This browser has no Web Bluetooth, which only matters for local pairing — the board code works everywhere.',
     }),
   ]);
 }

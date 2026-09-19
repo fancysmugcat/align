@@ -1,6 +1,6 @@
 import { ALL_RANGES, HistoryRange, PostureZone, LeanSide } from '../models.js';
 import { PostureStore } from '../stores/postureStore.js';
-import { DeviceManager } from '../device.js';
+import { DeviceManager, isIOS, isIOSBluetoothBrowser, IOS_BLUETOOTH_BROWSER } from '../device.js';
 import { Theme } from '../theme.js';
 import {
   h, card, icon, Icons, createPostureArc, silhouette, leanArc, angleChart,
@@ -138,7 +138,9 @@ function connectionBanner(device, actions) {
   if (supported) {
     alternatives.push(h('button', {
       type: 'button', class: 'pill-button pill-button--ghost',
-      text: 'Bluetooth',
+      // On iOS this button only exists because the wearer went and installed a
+      // browser for it, so name the thing that made it possible.
+      text: isIOSBluetoothBrowser() ? `Bluetooth (${IOS_BLUETOOTH_BROWSER.name})` : 'Bluetooth',
       disabled: connecting,
       onClick: () => actions.connect(),
     }));
@@ -158,6 +160,23 @@ function connectionBanner(device, actions) {
   }));
 
   children.push(h('span', { class: 'banner-actions' }, alternatives));
+
+  // Without this, an iPhone just shows no Bluetooth button and no reason —
+  // indistinguishable from the feature being broken.
+  if (!supported && isIOS()) {
+    children.push(h('p', { class: 'hint hint--ios' }, [
+      'Safari has no Bluetooth — Apple requires every iPhone browser to use '
+      + "Safari's engine, so Chrome and Firefox here can't either. Use the board "
+      + 'code above, or open this page in ',
+      h('a', {
+        href: IOS_BLUETOOTH_BROWSER.url,
+        target: '_blank',
+        rel: 'noopener',
+        text: IOS_BLUETOOTH_BROWSER.name,
+      }),
+      ' — a free browser that adds Bluetooth to iOS — and the button appears.',
+    ]));
+  }
 
   return h('div', { class: 'banner banner--connect' }, children);
 }

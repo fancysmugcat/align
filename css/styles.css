@@ -665,3 +665,14 @@ body.signed-out .topbar-actions { display: none; }
   white-space: nowrap;
   border: 0;
 }
+
+/* Guidance shown only on iOS, where Bluetooth needs a browser that ships its
+   own implementation. Slightly separated so it reads as an aside, not a
+   failure message. */
+.hint--ios {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line, rgba(0, 0, 0, .1));
+  line-height: 1.5;
+}
+.hint--ios a { color: var(--green); font-weight: 700; }
