@@ -123,23 +123,24 @@ export function createPostureArc({
     opacity: 0.32,
   });
 
+  // Only colour is left to CSS. Position is eased in JS below, because the
+  // browser cannot be told to interpolate *along the arc*.
   const travelled = svg('path', {
     d: '', fill: 'none', 'stroke-width': lineWidth, 'stroke-linecap': 'round',
     stroke: Theme.zoneGood,
-    style: { transition: 'd .35s ease-out, stroke .35s linear' },
+    style: { transition: 'stroke .35s linear' },
   });
 
   const knob = svg('circle', {
     r: knobRadius, fill: '#FFFFFF', stroke: Theme.zoneGood, 'stroke-width': 2.5,
     cx: cx - r, cy,
-    style: { transition: 'cx .35s ease-out, cy .35s ease-out, stroke .35s linear' },
+    style: { transition: 'stroke .35s linear' },
   });
 
   const label = svg('text', {
     x: cx - r, y: cy - knobRadius - 10,
     'text-anchor': 'middle', 'dominant-baseline': 'middle',
     fill: Theme.ink, 'font-size': 13, 'font-weight': 600,
-    style: { transition: 'x .35s ease-out, y .35s ease-out' },
   });
 
   const el = svg('svg', {
@@ -148,32 +149,85 @@ export function createPostureArc({
     role: 'img',
   }, showKnob ? [track, travelled, knob, label] : [track]);
 
-  function update(angle, zone) {
-    const progress = Math.min(Math.max(angle / maxAngle, 0), 1);
+  /**
+   * Position is eased here rather than by CSS.
+   *
+   * A CSS transition on cx and cy interpolates the two independently, which
+   * walks the knob along a straight chord through the inside of the arc — it
+   * visibly leaves the track on every move. The fill made it worse: WebKit
+   * doesn't animate the `d` attribute, so the arc snapped to the new value
+   * while the knob was still 350ms behind, and the two were permanently out of
+   * step. Readings arrive every 100ms against a 350ms transition, so the knob
+   * never settled at all.
+   *
+   * Easing one number — the angle — and recomputing the point from it every
+   * frame keeps the knob exactly on the circle by construction, and keeps the
+   * fill pinned to it because both are drawn from the same value.
+   */
+  let targetAngle = 0;
+  let shownAngle = 0;
+  let zoneNow = PostureZone.good;
+  let frame = null;
+
+  /** Fraction of the remaining distance closed per frame. */
+  const EASING = 0.22;
+  /** Below this the move isn't visible, so stop rather than loop forever. */
+  const SETTLED = 0.05;
+
+  const reduceMotion = typeof matchMedia === 'function'
+    && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function draw() {
+    const progress = Math.min(Math.max(shownAngle / maxAngle, 0), 1);
     /** Arc degrees: 180 is the left end, 270 straight up, 360 the right end. */
     const knobDegrees = ARC_START + (ARC_END - ARC_START) * progress;
 
-    track.setAttribute('stroke', zone.color);
+    track.setAttribute('stroke', zoneNow.color);
     if (!showKnob) return;
 
-    travelled.setAttribute('stroke', zone.color);
+    travelled.setAttribute('stroke', zoneNow.color);
     travelled.setAttribute('d', progress > 0.02 ? arcPath(cx, cy, r, ARC_START, knobDegrees) : '');
 
     const point = pointOn(cx, cy, r, knobDegrees);
     knob.setAttribute('cx', point.x.toFixed(2));
     knob.setAttribute('cy', point.y.toFixed(2));
-    knob.setAttribute('stroke', zone.color);
+    knob.setAttribute('stroke', zoneNow.color);
 
     // The label rides the knob, and at either end of a full sweep that would
     // hang it off the side of the canvas and clip the text.
     const margin = 30;
     label.setAttribute('x', Math.min(Math.max(point.x, margin), width - margin).toFixed(2));
     label.setAttribute('y', (point.y - knobRadius - 10).toFixed(2));
-    label.textContent = `${Math.round(angle)}° off`;
-    el.setAttribute('aria-label', `${Math.round(angle)} degrees from upright`);
+    label.textContent = `${Math.round(shownAngle)}° off`;
+    el.setAttribute('aria-label', `${Math.round(shownAngle)} degrees from upright`);
+  }
+
+  function tick() {
+    frame = null;
+    const remaining = targetAngle - shownAngle;
+    if (Math.abs(remaining) <= SETTLED) shownAngle = targetAngle;
+    else {
+      shownAngle += remaining * EASING;
+      frame = requestAnimationFrame(tick);
+    }
+    draw();
+  }
+
+  function update(angle, zone) {
+    targetAngle = Number.isFinite(angle) ? angle : 0;
+    zoneNow = zone;
+
+    if (reduceMotion || !showKnob) {
+      shownAngle = targetAngle;
+      draw();
+      return;
+    }
+    if (frame === null) frame = requestAnimationFrame(tick);
   }
 
   update(0, PostureZone.good);
+  shownAngle = 0;
+  draw();
   return { el, update };
 }
 
