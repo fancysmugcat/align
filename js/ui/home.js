@@ -1,4 +1,4 @@
-import { ALL_RANGES, HistoryRange, PostureZone, LeanSide } from '../models.js';
+import { ALL_RANGES, HistoryRange, PostureZone, LeanSide, leanFor } from '../models.js';
 import { PostureStore } from '../stores/postureStore.js';
 import { DeviceManager, isIOS, isIOSBluetoothBrowser, IOS_BLUETOOTH_BROWSER } from '../device.js';
 import { Theme } from '../theme.js';
@@ -7,6 +7,9 @@ import {
 } from './components.js';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** Degrees of roll at each end of the live lean track. */
+const LEAN_FULL_SCALE = 30;
 
 /**
  * The home screen: banners, streak, live angle, progress and lean cards.
@@ -45,7 +48,12 @@ export function createHome({ posture, device, actions }) {
   }
 
   refresh();
-  return { el, refresh, updateLive: angle.updateLive };
+  return {
+    el,
+    refresh,
+    // Both move at reading rate; everything else waits for refresh().
+    updateLive: () => { angle.updateLive(); lean.updateLive(); },
+  };
 }
 
 // MARK: - Banners
@@ -336,8 +344,64 @@ function createLeanCard(posture, getRange) {
     h('h2', { class: 'card-title', text: 'Left or Right?' }),
     subtitle,
   ]);
+
+  // The arc underneath answers "which way do you tend to lean", averaged over
+  // the selected range. That needs ten-second samples and a sustained bias, so
+  // it says nothing at all for the first few minutes and never reacts to you
+  // moving. This row answers "which way am I leaning right now", straight off
+  // the live reading — which is what someone wearing the band is actually
+  // asking when they lean over to look at it.
+  const liveLabel = h('span', { class: 'lean-live-label' });
+  const liveAngle = h('span', { class: 'lean-live-angle' });
+  const marker = h('span', { class: 'lean-live-marker' });
+  const live = h('div', { class: 'lean-live' }, [
+    h('div', { class: 'lean-live-copy' }, [liveLabel, liveAngle]),
+    h('div', { class: 'lean-live-track' }, [
+      h('span', { class: 'lean-live-centre' }),
+      marker,
+    ]),
+    h('div', { class: 'lean-live-ends' }, [
+      h('span', { text: 'Left' }),
+      h('span', { text: 'Right' }),
+    ]),
+  ]);
+
   const body = h('div');
-  const el = h('section', { class: 'card' }, [heading, body]);
+  const el = h('section', { class: 'card' }, [heading, live, body]);
+
+  function updateLive() {
+    if (!posture.isCalibrated) {
+      liveLabel.textContent = 'Calibrate to see live lean';
+      liveAngle.textContent = '';
+      marker.style.left = '50%';
+      marker.dataset.side = 'center';
+      return;
+    }
+
+    const sample = posture.current;
+    if (!sample) {
+      liveLabel.textContent = 'Waiting for readings';
+      liveAngle.textContent = '';
+      marker.style.left = '50%';
+      marker.dataset.side = 'center';
+      return;
+    }
+
+    // Roll is already relative to the calibrated upright, so a board mounted
+    // slightly off-square doesn't read as a permanent lean.
+    const roll = sample.roll;
+    const side = leanFor(roll);
+    liveLabel.textContent = side === LeanSide.left
+      ? 'Leaning left'
+      : side === LeanSide.right ? 'Leaning right' : 'Centred';
+    liveAngle.textContent = `${Math.abs(roll).toFixed(1)}°`;
+
+    // Past 30 degrees the exact number stops mattering; peg the marker so it
+    // can't slide out of its track.
+    const clamped = Math.max(-LEAN_FULL_SCALE, Math.min(LEAN_FULL_SCALE, roll));
+    marker.style.left = `${50 + (clamped / LEAN_FULL_SCALE) * 50}%`;
+    marker.dataset.side = side;
+  }
 
   function refresh() {
     const bias = posture.leanBias(getRange());
@@ -351,9 +415,10 @@ function createLeanCard(posture, getRange) {
         h('span', { text: `Right ${percent(bias.rightShare)}` }),
       ]));
     }
+    updateLive();
   }
 
-  return { el, refresh };
+  return { el, refresh, updateLive };
 }
 
 function describe(bias) {

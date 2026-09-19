@@ -676,3 +676,68 @@ body.signed-out .topbar-actions { display: none; }
   line-height: 1.5;
 }
 .hint--ios a { color: var(--green); font-weight: 700; }
+
+/* ---------------------------------------------------------------- live lean */
+
+/* "Which way am I leaning right now", above the weekly averages. Moves at
+   reading rate, so transitions are kept short enough not to lag behind. */
+.lean-live {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px;
+  background: var(--card-inner);
+  border-radius: 14px;
+}
+
+.lean-live-copy { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.lean-live-label { font-size: 14px; font-weight: 700; color: var(--green); }
+.lean-live-angle { font-size: 13px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.lean-live-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+/* The upright reference, so "centred" is a place on the track and not just a word. */
+.lean-live-centre {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: rgba(27, 107, 55, .45);
+}
+
+.lean-live-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: var(--zone-good);
+  box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(0, 0, 0, .25);
+  transition: left .08s linear, background-color .2s ease;
+}
+.lean-live-marker[data-side="left"],
+.lean-live-marker[data-side="right"] { background: var(--zone-poor); }
+
+.lean-live-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+/* Someone checking their lean is usually already leaning, so the readout has
+   to stay legible at a glance rather than reward careful reading. */
+@media (prefers-reduced-motion: reduce) {
+  .lean-live-marker { transition: none; }
+}
