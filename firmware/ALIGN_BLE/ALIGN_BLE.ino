@@ -124,6 +124,10 @@ bool calibrated = false;
 // connection alone isn't enough — the browser has to write the CCCD too.
 uint16_t subscriberCount = 0;
 
+// Purely diagnostic: the log is the only way to tell a board nobody
+// connected to from one that connected and then never subscribed.
+bool clientConnected = false;
+
 unsigned long previousMillis = 0;
 unsigned long lastPrintMs = 0;
 unsigned long badSinceMs = 0;
@@ -300,6 +304,7 @@ void updateBuzz(unsigned long now) {
 
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *s, NimBLEConnInfo &info) override {
+    clientConnected = true;
     Serial.print("Website connected (");
     Serial.print(info.getAddress().toString().c_str());
     Serial.println(") — waiting for it to subscribe.");
@@ -310,6 +315,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     Serial.print(reason);
     Serial.println(") — advertising again.");
     subscriberCount = 0;
+    clientConnected = false;
     NimBLEDevice::startAdvertising();
   }
 };
@@ -389,10 +395,19 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 //   [6..7] uint16 sequence number
 void notifyPosture() {
   if (postureChar == nullptr) return;
-  // No subscriber means nothing is listening; notifying anyway just burns
-  // radio time. This counter comes from onSubscribe, not from the connection
-  // bookkeeping that was unreliable on the bundled stack.
-  if (subscriberCount == 0) return;
+
+  // Deliberately NOT gated on subscriberCount.
+  //
+  // That counter only moves when onSubscribe fires, so it made the entire data
+  // stream depend on one callback. When it didn't fire the board went totally
+  // silent while looking healthy from every other angle — connected,
+  // advertising, sensor read, no errors, nothing in the log — and the website
+  // could only report that no readings arrived. A guard whose failure mode is
+  // "silently send nothing, forever" is worse than no guard.
+  //
+  // It also bought nothing: NimBLE's notify() already transmits only to
+  // clients that enabled notifications, and is a cheap no-op otherwise. At
+  // 10 Hz the wasted work is unmeasurable.
 
   int16_t p = (int16_t)roundf(pitch * 100.0f);
   int16_t r = (int16_t)roundf(roll * 100.0f);
@@ -510,6 +525,8 @@ void loop() {
     Serial.print(deviation(), 1);
     Serial.print("  calibrated=");
     Serial.print(calibrated ? "yes" : "no");
+    Serial.print("  connected=");
+    Serial.print(clientConnected ? "yes" : "no");
     Serial.print("  subscribers=");
     Serial.print(subscriberCount);
     Serial.print("  sent=");
