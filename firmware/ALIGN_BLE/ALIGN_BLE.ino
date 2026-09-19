@@ -13,7 +13,8 @@
  * notify() returns a bool, so the serial log can prove a packet went out.
  *
  * Board:   XIAO ESP32-C3
- * Sensor:  LSM6DS3 at 0x6B on SDA 6 / SCL 7 — SparkFun LSM6DS3 library
+ * Sensor:  MPU-6050 (0x68/0x69) or LSM6DS3 (0x6A/0x6B), pins probed — the
+ *          board in hand has an MPU-6050 on SDA 6 / SCL 7
  * Motor:   GPIO 4
  * Library: NimBLE-Arduino 2.x
  *
@@ -69,10 +70,44 @@ const float SMOOTHING = 0.75;               // 0 = raw, 0.9 = heavily smoothed
 
 // ---------------------------------------------------------------- state
 
-LSM6DS3 imu(I2C_MODE, 0x6B);
+LSM6DS3 *imu = nullptr;   // built once the probe knows the address
 
 NimBLEServer         *server      = nullptr;
 NimBLECharacteristic *postureChar = nullptr;
+
+struct I2CPins { int sda; int scl; };
+const I2CPins I2C_CANDIDATES[] = {
+  {6, 7},     // what the ALIGN prototypes were wired to
+  {8, 9},     // the Arduino core's default for the C3
+  {5, 6},
+  {7, 8},
+  {9, 10},
+  {2, 3},
+  {20, 21},   // the classic ESP32 pair, on boards that expose them
+};
+
+// Two different sensors have been on this hardware. The LSM6DS3 the ALIGN
+// prototypes were built around answers at 0x6A/0x6B (SDO low/high); the
+// MPU-6050 actually soldered to this board answers at 0x68/0x69 (AD0 low/high)
+// and is a completely different chip with different registers. Probing only
+// for the LSM6DS3 is why the sensor read as absent while it was working fine.
+enum ImuKind { IMU_NONE, IMU_LSM6DS3, IMU_MPU6050 };
+
+struct ImuCandidate {
+  uint8_t address;
+  uint8_t whoAmIRegister;
+  ImuKind kind;
+};
+const ImuCandidate IMU_CANDIDATES[] = {
+  { 0x68, 0x75, IMU_MPU6050 },   // WHO_AM_I reads back 0x68 (clones vary)
+  { 0x69, 0x75, IMU_MPU6050 },
+  { 0x6B, 0x0F, IMU_LSM6DS3 },   // WHO_AM_I reads 0x69, or 0x6A on the TR-C
+  { 0x6A, 0x0F, IMU_LSM6DS3 },
+};
+
+int sdaPin = SDA_PIN, sclPin = SCL_PIN;
+uint8_t imuAddress = 0x68;
+ImuKind imuKind = IMU_NONE;
 
 bool imuPresent = false;
 
@@ -105,6 +140,84 @@ unsigned long notifiesFailed = 0;
 //
 // If left and right come out swapped, negate rollDeg. If leaning forward reads
 // as leaning back, negate pitchDeg.
+/**
+ * Finds the IMU by trying each candidate pin pair in turn, for either sensor.
+ *
+ * An address that ACKs is not proof on its own — a floating pin pair can ACK
+ * anything — so WHO_AM_I is read as well. Its value is logged but not required
+ * to match: MPU-6050 clones report 0x70, 0x72, 0x75 and 0x98 as readily as the
+ * genuine 0x68, and rejecting those would put us right back to calling a
+ * working sensor absent.
+ */
+bool findIMU() {
+  for (const I2CPins &pins : I2C_CANDIDATES) {
+    if (pins.sda == MOTOR_PIN || pins.scl == MOTOR_PIN) continue;
+
+    Wire.end();
+    if (!Wire.begin(pins.sda, pins.scl)) continue;
+    Wire.setClock(100000);
+    delay(20);
+
+    for (const ImuCandidate &candidate : IMU_CANDIDATES) {
+      Wire.beginTransmission(candidate.address);
+      if (Wire.endTransmission() != 0) continue;
+
+      Wire.beginTransmission(candidate.address);
+      Wire.write(candidate.whoAmIRegister);
+      if (Wire.endTransmission(false) != 0) continue;
+      if (Wire.requestFrom((int)candidate.address, 1) != 1) continue;
+
+      uint8_t who = Wire.read();
+      Serial.printf("  %s at 0x%02X on SDA %d / SCL %d, WHO_AM_I 0x%02X\n",
+                    candidate.kind == IMU_MPU6050 ? "MPU-6050" : "LSM6DS3",
+                    candidate.address, pins.sda, pins.scl, who);
+
+      sdaPin = pins.sda;
+      sclPin = pins.scl;
+      imuAddress = candidate.address;
+      imuKind = candidate.kind;
+      return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------- MPU-6050
+
+void mpuWrite(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(imuAddress);
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
+
+bool mpuBegin() {
+  mpuWrite(0x6B, 0x00);   // wake up — it boots into sleep
+  mpuWrite(0x1C, 0x00);   // accel +/- 2g
+  mpuWrite(0x1B, 0x00);   // gyro +/- 250 deg/s
+  delay(20);
+  return true;
+}
+
+// Accelerometer only, to match the LSM6DS3 path and the gauge's expectations.
+// The gyro is read and discarded rather than fused: a complementary filter
+// needs a reliable dt, and this loop's is whatever the web server and MQTT
+// keepalive leave behind.
+void mpuReadTilt(float &pitchDeg, float &rollDeg) {
+  Wire.beginTransmission(imuAddress);
+  Wire.write(0x3B);
+  if (Wire.endTransmission(false) != 0) return;
+  if (Wire.requestFrom((int)imuAddress, 6) < 6) return;
+
+  int16_t ax = Wire.read() << 8 | Wire.read();
+  int16_t ay = Wire.read() << 8 | Wire.read();
+  int16_t az = Wire.read() << 8 | Wire.read();
+
+  float axg = ax / 16384.0f, ayg = ay / 16384.0f, azg = az / 16384.0f;
+  pitchDeg = atan2f(-axg, sqrtf(ayg * ayg + azg * azg)) * 180.0f / PI;
+  rollDeg  = atan2f(ayg, azg) * 180.0f / PI;
+}
+
 void readTilt() {
   if (!imuPresent) {
     static float t = 0;
@@ -114,9 +227,17 @@ void readTilt() {
     return;
   }
 
-  float ax = imu.readFloatAccelX();
-  float ay = imu.readFloatAccelY();
-  float az = imu.readFloatAccelZ();
+  if (imuKind == IMU_MPU6050) {
+    float p = pitch, r = roll;
+    mpuReadTilt(p, r);
+    pitch = SMOOTHING * pitch + (1 - SMOOTHING) * p;
+    roll  = SMOOTHING * roll  + (1 - SMOOTHING) * r;
+    return;
+  }
+
+  float ax = imu->readFloatAccelX();
+  float ay = imu->readFloatAccelY();
+  float az = imu->readFloatAccelZ();
 
   float pitchDeg = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
   float rollDeg  = atan2(ay, az) * 180.0 / PI;
@@ -345,15 +466,26 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Wire.begin(SDA_PIN, SCL_PIN);
+  // Pins and chip are both probed — see findIMU().
   pinMode(MOTOR_PIN, OUTPUT);
   digitalWrite(MOTOR_PIN, LOW);
 
-  imuPresent = (imu.begin() == 0);
+  if (findIMU()) {
+    if (imuKind == IMU_MPU6050) {
+      imuPresent = mpuBegin();
+    } else {
+      imu = new LSM6DS3(I2C_MODE, imuAddress);
+      imuPresent = (imu->begin() == 0);
+    }
+  }
   Serial.println();
-  Serial.println(imuPresent
-      ? "LSM6DS3 ready: streaming real tilt."
-      : "LSM6DS3 not found on SDA 6 / SCL 7 — streaming a demo sweep instead.");
+  if (imuPresent) {
+    Serial.printf("%s ready at 0x%02X on SDA %d / SCL %d: streaming real tilt.\n",
+                  imuKind == IMU_MPU6050 ? "MPU-6050" : "LSM6DS3",
+                  imuAddress, sdaPin, sclPin);
+  } else {
+    Serial.println("No IMU found on any candidate pin pair — streaming a demo sweep.");
+  }
 
   startBLE();
 }
