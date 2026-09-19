@@ -599,22 +599,35 @@ void handleSetupRoot() {
   html += "<p style='margin:0 0 4px'><b>Join a Wi-Fi network</b></p>";
   html += "<p style='margin:0;font-size:12px'>This board has a 2.4 GHz radio only, so 5 GHz networks won't be listed.</p>";
 
+  // A scan is a snapshot taken right now, and some networks are simply not in
+  // it — hidden SSIDs, and phone hotspots, which sleep until something tries
+  // to join and so are usually dark at the moment the page loads. The list is
+  // a convenience; the text box underneath is what makes those reachable at
+  // all. Offering only the dropdown left anyone whose network hadn't appeared
+  // with no way to proceed.
   int found = WiFi.scanNetworks();
   html += "<label for='ssid'>Network</label>";
-  if (found > 0) {
-    html += "<select id='ssid' name='ssid'>";
-    for (int i = 0; i < found; i++) {
-      String name = WiFi.SSID(i);
-      if (name.length() == 0) continue;
-      name.replace("'", "&#39;");
-      name.replace("<", "&lt;");
-      html += "<option value='" + name + "'>" + name + "  (" + String(WiFi.RSSI(i)) + " dBm)</option>";
-    }
-    html += "</select>";
-  } else {
-    html += "<input id='ssid' name='ssid' placeholder='Network name' autocapitalize='off'>";
+  html += "<select id='ssid' name='ssid'>";
+  html += "<option value=''>— pick, or type one below —</option>";
+  for (int i = 0; i < found; i++) {
+    String name = WiFi.SSID(i);
+    if (name.length() == 0) continue;
+    name.replace("&", "&amp;");
+    name.replace("'", "&#39;");
+    name.replace("<", "&lt;");
+    html += "<option value='" + name + "'>" + name + "  (" + String(WiFi.RSSI(i)) + " dBm)</option>";
   }
+  html += "</select>";
+  html += "<p style='margin:8px 0 0;font-size:12px'>" + String(found) + " network";
+  html += String(found == 1 ? "" : "s") + " in range. <a href='/'>Scan again</a></p>";
   WiFi.scanDelete();
+
+  html += "<label for='other'>…or type the name yourself</label>";
+  html += "<input id='other' name='other' placeholder='e.g. your phone hotspot' ";
+  html += "autocapitalize='off' autocorrect='off' spellcheck='false'>";
+  html += "<p style='margin:8px 0 0;font-size:12px'>Phone hotspots often don't show up in the ";
+  html += "list: they sleep until something joins. Type the name exactly, keep the hotspot ";
+  html += "screen open on the phone, and this will find it.</p>";
 
   html += "<label for='pass'>Password</label>";
   html += "<input id='pass' name='pass' type='password' placeholder='Wi-Fi password'>";
@@ -629,12 +642,19 @@ void handleSetupRoot() {
 }
 
 void handleSave() {
-  String ssid = server.arg("ssid");
-  String pass = server.arg("pass");
+  // A typed name wins over the dropdown: it is the more deliberate of the two,
+  // and it is the only way to reach a network the scan never saw.
+  String ssid = server.arg("other");
   ssid.trim();
+  if (ssid.length() == 0) {
+    ssid = server.arg("ssid");
+    ssid.trim();
+  }
+  String pass = server.arg("pass");
 
   if (ssid.length() == 0) {
-    server.send(400, "text/html", pageHead("ALIGN") + "<h1>ALIGN</h1><p>Pick a network first.</p>"
+    server.send(400, "text/html", pageHead("ALIGN") + "<h1>ALIGN</h1>"
+                                  + "<p>Pick a network from the list, or type its name.</p>"
                                   + "<p><a href='/'>Back</a></p></body></html>");
     return;
   }
@@ -705,6 +725,8 @@ void handleForget() {
 
 const char *disconnectReason(uint8_t reason) {
   switch (reason) {
+    case WIFI_REASON_DISASSOC_DUE_TO_INACTIVITY: return "the access point dropped us as idle (reason 4)";
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT: return "wrong password (4-way handshake timed out)";
     case WIFI_REASON_NO_AP_FOUND:       return "no access point with that name is in range";
     case WIFI_REASON_AUTH_FAIL:         return "the network refused the password";
     case WIFI_REASON_ASSOC_FAIL:        return "the access point refused to associate";
