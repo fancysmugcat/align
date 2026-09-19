@@ -88,8 +88,17 @@ export function arcPath(cx, cy, r, from, to) {
 
 /**
  * The inverted-U gauge over the silhouette. `angle` is degrees away from the
- * calibrated upright posture; the knob travels left as it grows.
+ * calibrated upright posture — a distance, with no direction in it.
+ *
+ * The knob fills the arc left to right as that distance grows, the way any
+ * progress dial does. It used to start at the top and travel *left*, which on
+ * a posture device sitting beside a card called "Left or Right?" got read as
+ * "you are leaning left" — reported twice as a bug. Sweeping rightward also
+ * uses the whole arc rather than half of it.
  */
+const ARC_START = 180;   // left end of the arc
+const ARC_END = 360;     // right end
+
 export function createPostureArc({
   width = 300, arcHeight = 92, lineWidth = 18, maxAngle = 45, showKnob = true,
 } = {}) {
@@ -122,12 +131,12 @@ export function createPostureArc({
 
   const knob = svg('circle', {
     r: knobRadius, fill: '#FFFFFF', stroke: Theme.zoneGood, 'stroke-width': 2.5,
-    cx, cy: cy - r,
+    cx: cx - r, cy,
     style: { transition: 'cx .35s ease-out, cy .35s ease-out, stroke .35s linear' },
   });
 
   const label = svg('text', {
-    x: cx, y: cy - r - knobRadius - 10,
+    x: cx - r, y: cy - knobRadius - 10,
     'text-anchor': 'middle', 'dominant-baseline': 'middle',
     fill: Theme.ink, 'font-size': 13, 'font-weight': 600,
     style: { transition: 'x .35s ease-out, y .35s ease-out' },
@@ -141,24 +150,25 @@ export function createPostureArc({
 
   function update(angle, zone) {
     const progress = Math.min(Math.max(angle / maxAngle, 0), 1);
-    /** Knob position in arc degrees: 270 is straight up, 180 is left. */
-    const knobDegrees = 270 - 80 * progress;
+    /** Arc degrees: 180 is the left end, 270 straight up, 360 the right end. */
+    const knobDegrees = ARC_START + (ARC_END - ARC_START) * progress;
 
     track.setAttribute('stroke', zone.color);
     if (!showKnob) return;
 
     travelled.setAttribute('stroke', zone.color);
-    travelled.setAttribute('d', progress > 0.02 ? arcPath(cx, cy, r, knobDegrees, 270) : '');
+    travelled.setAttribute('d', progress > 0.02 ? arcPath(cx, cy, r, ARC_START, knobDegrees) : '');
 
     const point = pointOn(cx, cy, r, knobDegrees);
     knob.setAttribute('cx', point.x.toFixed(2));
     knob.setAttribute('cy', point.y.toFixed(2));
     knob.setAttribute('stroke', zone.color);
 
-    label.setAttribute('x', point.x.toFixed(2));
+    // The label rides the knob, and at either end of a full sweep that would
+    // hang it off the side of the canvas and clip the text.
+    const margin = 30;
+    label.setAttribute('x', Math.min(Math.max(point.x, margin), width - margin).toFixed(2));
     label.setAttribute('y', (point.y - knobRadius - 10).toFixed(2));
-    // "54° off" rather than "54°": the bare number next to a leftward-swinging
-    // needle was being read as a heading.
     label.textContent = `${Math.round(angle)}° off`;
     el.setAttribute('aria-label', `${Math.round(angle)} degrees from upright`);
   }
