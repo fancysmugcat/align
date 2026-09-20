@@ -265,7 +265,7 @@ function createAngleCard(posture, device) {
 
   const el = card({
     title: 'Current Angle',
-    subtitle: 'Rests at the top when you are upright, and follows the way you lean',
+    subtitle: 'How far you are leaning, and which way — forward slouch is not counted',
   }, [gauge, verdict, stream]);
 
   function isLive() {

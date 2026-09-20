@@ -91,10 +91,14 @@ export class PostureStore {
   ingest(reading) {
     if (!this.calibration) return;
 
-    const pitchDelta = reading.pitch - this.calibration.pitch;
     const rollDelta = reading.roll - this.calibration.roll;
-    // Total tilt away from upright, combining slouch (pitch) and lean (roll).
-    const angle = Math.sqrt(pitchDelta * pitchDelta + rollDelta * rollDelta);
+    // Sideways lean only. This used to combine pitch and roll into one total
+    // tilt, which meant the number could climb while the wearer hadn't leaned
+    // at all — and the gauge, which shows direction on a left-right arc, had
+    // no way to place a forward slouch. Measuring the one axis the display can
+    // actually express keeps the number and the knob describing the same
+    // thing.
+    const angle = Math.abs(rollDelta);
 
     const sample = { date: reading.timestamp, angle, roll: rollDelta };
     this.current = sample;
