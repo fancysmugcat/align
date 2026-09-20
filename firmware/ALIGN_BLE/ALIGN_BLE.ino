@@ -207,11 +207,12 @@ bool mpuBegin() {
 // The gyro is read and discarded rather than fused: a complementary filter
 // needs a reliable dt, and this loop's is whatever the web server and MQTT
 // keepalive leave behind.
-void mpuReadTilt(float &pitchDeg, float &rollDeg) {
+/** @returns false if the bus didn't answer, leaving the angles untouched. */
+bool mpuReadTilt(float &pitchDeg, float &rollDeg) {
   Wire.beginTransmission(imuAddress);
   Wire.write(0x3B);
-  if (Wire.endTransmission(false) != 0) return;
-  if (Wire.requestFrom((int)imuAddress, 6) < 6) return;
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((int)imuAddress, 6) < 6) return false;
 
   int16_t ax = Wire.read() << 8 | Wire.read();
   int16_t ay = Wire.read() << 8 | Wire.read();
@@ -226,6 +227,24 @@ void mpuReadTilt(float &pitchDeg, float &rollDeg) {
   // sensor faces is the only thing that decides this sign, so it belongs here
   // at the source rather than being undone again in the website.
   rollDeg  = -atan2f(ayg, azg) * 180.0f / PI;
+  return true;
+}
+
+// A failed read used to return silently, so the last angles stayed in place and
+// were notified over and over. From the website that is indistinguishable from
+// a wearer sitting perfectly still — the link looks healthy, the timestamps
+// advance, and the numbers simply stop moving. Counted and recovered from now.
+unsigned long imuReadErrors = 0;
+uint16_t imuFailStreak = 0;
+
+/** Re-opens the bus and re-wakes the sensor after a run of failed reads. */
+void recoverI2C() {
+  Wire.end();
+  delay(5);
+  Wire.begin(sdaPin, sclPin);
+  Wire.setClock(100000);
+  mpuBegin();
+  Serial.printf("I2C stalled after %lu failed reads — bus re-initialised.\n", imuReadErrors);
 }
 
 void readTilt() {
@@ -239,7 +258,13 @@ void readTilt() {
 
   if (imuKind == IMU_MPU6050) {
     float p = pitch, r = roll;
-    mpuReadTilt(p, r);
+    if (!mpuReadTilt(p, r)) {
+      imuReadErrors++;
+      // Roughly two seconds of failures at the 100ms sample rate.
+      if (++imuFailStreak >= 20) { imuFailStreak = 0; recoverI2C(); }
+      return;                       // keep the last angles; don't invent one
+    }
+    imuFailStreak = 0;
     pitch = SMOOTHING * pitch + (1 - SMOOTHING) * p;
     roll  = SMOOTHING * roll  + (1 - SMOOTHING) * r;
     return;
@@ -256,10 +281,11 @@ void readTilt() {
   roll  = SMOOTHING * roll  + (1 - SMOOTHING) * rollDeg;
 }
 
+// Sideways lean only, matching the website. Combining pitch and roll here made
+// the board buzz for a forward slouch that the screen scored as fine, and the
+// two disagreeing about what "bad posture" means is worse than either rule.
 float deviation() {
-  float dp = pitch - basePitch;
-  float dr = roll - baseRoll;
-  return sqrt(dp * dp + dr * dr);
+  return fabs(roll - baseRoll);
 }
 
 int batteryPercent() {
@@ -531,6 +557,8 @@ void loop() {
     Serial.print(deviation(), 1);
     Serial.print("  calibrated=");
     Serial.print(calibrated ? "yes" : "no");
+    Serial.print("  i2cErrors=");
+    Serial.print(imuReadErrors);
     Serial.print("  connected=");
     Serial.print(clientConnected ? "yes" : "no");
     Serial.print("  subscribers=");
