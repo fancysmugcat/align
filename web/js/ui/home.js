@@ -257,10 +257,16 @@ function createAngleCard(posture, device) {
   // called "Left or Right?" — and the needle sweeping leftward as the number
   // grows makes that reading almost irresistible. It is a distance: how far
   // off upright, combining slouch and lean, never which way.
+  // Raw pitch and roll, straight off the board. Without this an uncalibrated
+  // gauge sits at 0 degrees and never moves — PostureStore.ingest() drops every
+  // reading until there is a baseline to measure against — and nothing on
+  // screen says whether the board is streaming or dead. Now it always does.
+  const stream = h('p', { class: 'hint gauge-stream' });
+
   const el = card({
     title: 'Current Angle',
     subtitle: 'Rests at the top when you are upright, and follows the way you lean',
-  }, [gauge, verdict]);
+  }, [gauge, verdict, stream]);
 
   function isLive() {
     return posture.isCalibrated && device.isUsable && posture.current !== null;
@@ -285,6 +291,19 @@ function createAngleCard(posture, device) {
     detail.textContent = live
       ? zone.advice
       : (posture.isCalibrated ? device.label : 'Calibrate to start tracking your angle.');
+
+    const latest = device.latest;
+    if (!latest) {
+      stream.textContent = device.isUsable ? 'Waiting for the first reading…' : '';
+    } else {
+      const seen = latest.timestamp instanceof Date
+        ? latest.timestamp.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+        : '';
+      const raw = `board: pitch ${latest.pitch.toFixed(1)}° · roll ${latest.roll.toFixed(1)}°${seen ? ` · ${seen}` : ''}`;
+      stream.textContent = posture.isCalibrated
+        ? raw
+        : `${raw} — calibrate to measure against your upright posture`;
+    }
   }
 
   return { el, refresh: updateLive, updateLive };
