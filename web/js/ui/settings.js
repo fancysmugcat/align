@@ -33,7 +33,7 @@ export function openSettings({ device, posture, settings, sync, profile, actions
       profileCard({ profile, actions }),
       batteryCard(device),
       buzzCard(settings),
-      deviceCard({ device, posture, actions, close: sheet.close }),
+      deviceCard({ device, posture, settings, actions, close: sheet.close }),
       issuesSection(settings),
       dataSection(posture, sync),
     );
@@ -122,7 +122,7 @@ function buzzCard(settings) {
 
 // MARK: - Device
 
-function deviceCard({ device, posture, actions, close }) {
+function deviceCard({ device, posture, settings, actions, close }) {
   const connected = device.state === DeviceManager.State.connected;
 
   // Reconnecting goes back through the board code rather than Bluetooth: it
@@ -157,6 +157,20 @@ function deviceCard({ device, posture, actions, close }) {
       connectButton,
     ]),
 
+    h('hr', { class: 'divider' }),
+    row('Sides', settings.swapSides ? 'Swapped' : 'Normal', !settings.swapSides),
+    h('button', {
+      type: 'button',
+      class: 'pill-button pill-button--ghost',
+      text: settings.swapSides ? 'Swap left and right back' : 'Swap left and right',
+      onClick: () => { settings.swapSides = !settings.swapSides; },
+    }),
+    h('p', {
+      class: 'hint',
+      text: 'Lean to your right and check the gauge agrees. Which way round the sensor ended up facing when the band was built decides this, so it is a switch rather than something the firmware can know.',
+    }),
+
+    h('hr', { class: 'divider' }),
     h('button', {
       type: 'button',
       class: 'link-button',

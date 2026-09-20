@@ -66,7 +66,11 @@ const unsigned long BUZZ_COOLDOWN_MS     = 10000;
 // Hard ceiling on one buzz, whatever the website asks for.
 const unsigned long MAX_BUZZ_MS          = 5000;
 
-const float SMOOTHING = 0.75;               // 0 = raw, 0.9 = heavily smoothed
+// At the 100ms sample rate 0.75 works out to a third of a second to reach two
+// thirds of a movement and close to a second to arrive — the gauge visibly
+// trailed the wearer, and the website's own easing sits on top of it. 0.45 is
+// a seventh of a second, still filtering accelerometer noise without the drag.
+const float SMOOTHING = 0.45;               // 0 = raw, 0.9 = heavily smoothed
 
 // ---------------------------------------------------------------- state
 

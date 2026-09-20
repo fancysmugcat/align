@@ -190,8 +190,11 @@ export function createPostureArc({
   let zoneNow = PostureZone.good;
   let frame = null;
 
-  /** Fraction of the remaining distance closed per frame. */
-  const EASING = 0.22;
+  // Fraction of the remaining distance closed per frame. The board already
+  // applies a heavy exponential filter of its own before a reading ever leaves
+  // it, so a slow easing here stacks on top of that and the gauge trails the
+  // wearer visibly. Fast enough to feel immediate, slow enough not to jitter.
+  const EASING = 0.4;
   /** Below this the move isn't visible, so stop rather than loop forever. */
   const SETTLED = 0.05;
 
