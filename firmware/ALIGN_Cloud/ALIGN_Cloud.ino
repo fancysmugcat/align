@@ -268,6 +268,9 @@ bool mpuBegin() {
 // The gyro is read and discarded rather than fused: a complementary filter
 // needs a reliable dt, and this loop's is whatever the web server and MQTT
 // keepalive leave behind.
+/** Last raw g-readings, printed so the axis mapping can be verified. */
+float lastAxg = 0, lastAyg = 0;
+
 /** @returns false if the bus didn't answer, leaving the angles untouched. */
 bool mpuReadTilt(float &pitchDeg, float &rollDeg) {
   Wire.beginTransmission(imuAddress);
@@ -280,14 +283,21 @@ bool mpuReadTilt(float &pitchDeg, float &rollDeg) {
   int16_t az = Wire.read() << 8 | Wire.read();
 
   float axg = ax / 16384.0f, ayg = ay / 16384.0f, azg = az / 16384.0f;
-  pitchDeg = atan2f(-axg, sqrtf(ayg * ayg + azg * azg)) * 180.0f / PI;
 
-  // Negated: as this MPU-6050 is mounted, atan2(ay, az) runs positive when the
-  // wearer leans left, and the site's whole convention is positive = right.
-  // Without this, leaning right reported left and vice versa. Which way the
-  // sensor faces is the only thing that decides this sign, so it belongs here
-  // at the source rather than being undone again in the website.
-  rollDeg  = -atan2f(ayg, azg) * 180.0f / PI;
+  // Which axis is "sideways" is decided by how the sensor sits in the band, not
+  // by the chip. As this one is mounted, leaning left and right rotates the
+  // board about its Y axis — that lands on ax — while slouching forward and
+  // back rotates about X and lands on ay. The two were the other way round,
+  // so the angle that drives everything was tracking slouch rather than lean.
+  //
+  // Only the axes are chosen here. Whether a positive reading means left or
+  // right is Settings -> Device -> "Swap left and right", because it depends on
+  // which way the sensor ended up facing and no value compiled in here can be
+  // right for every build of the band.
+  lastAxg = axg;
+  lastAyg = ayg;
+  rollDeg  = atan2f(axg, azg) * 180.0f / PI;
+  pitchDeg = atan2f(-ayg, sqrtf(axg * axg + azg * azg)) * 180.0f / PI;
   return true;
 }
 
@@ -985,7 +995,11 @@ void loop() {
       Serial.print(SETUP_AP_SSID);
       Serial.println("\" and open http://192.168.4.1");
     } else {
-      Serial.print("  i2cErrors=");
+      Serial.print("  ax=");
+    Serial.print(lastAxg, 2);
+    Serial.print(" ay=");
+    Serial.print(lastAyg, 2);
+    Serial.print("  i2cErrors=");
     Serial.print(imuReadErrors);
     Serial.print("  wifi=");
       Serial.print(WiFi.SSID());
