@@ -755,3 +755,20 @@ body.signed-out .topbar-actions { display: none; }
 }
 .banner-more .pill-button { align-self: flex-start; }
 .banner--connect .link-button { font-size: 12px; }
+
+/* Live figures during calibration, and the baseline once it is recorded. */
+.calibration-readout {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;   /* reserve the line so the sheet doesn't jump */
+}
+
+/* Raw board reading under the gauge. Proves the link is alive even when there
+   is no baseline yet and the gauge itself cannot move. */
+.gauge-stream {
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+}

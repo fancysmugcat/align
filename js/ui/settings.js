@@ -142,6 +142,7 @@ function deviceCard({ device, posture, actions, close }) {
     detail ? h('p', { class: 'hint', text: detail }) : null,
     h('hr', { class: 'divider' }),
     row('Calibration', calibrationDetail(posture), posture.isCalibrated),
+    baselineDetail(posture) ? h('p', { class: 'hint', text: baselineDetail(posture) }) : null,
 
     h('div', { class: 'button-pair' }, [
       h('button', {
@@ -186,6 +187,13 @@ function calibrationDetail(posture) {
   return posture.calibration.date.toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
+}
+
+/** The upright posture itself, so it can be checked without recalibrating. */
+function baselineDetail(posture) {
+  const baseline = posture.calibration;
+  if (!baseline) return null;
+  return `Upright posture: pitch ${baseline.pitch.toFixed(1)}°, roll ${baseline.roll.toFixed(1)}°`;
 }
 
 function row(label, value, positive) {

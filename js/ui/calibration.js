@@ -28,6 +28,12 @@ export function openCalibration({ device, posture }) {
   const detail = h('p', { class: 'calibration-detail' });
   const status = h('p', { class: 'calibration-status' });
 
+  // What the board is reading right now, and — once recorded — what it decided
+  // your upright posture is. Calibration used to be three seconds of nothing
+  // followed by a tick, with no way to tell whether you had been sitting the
+  // way you meant to, or to see afterwards what it had actually stored.
+  const readout = h('p', { class: 'calibration-readout' });
+
   const button = h('button', {
     type: 'button', class: 'pill-button pill-button--wide', onClick: primaryAction,
   });
@@ -36,12 +42,13 @@ export function openCalibration({ device, posture }) {
     style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%' },
   }, [
     stage,
-    h('div', { class: 'calibration-copy' }, [title, detail]),
+    h('div', { class: 'calibration-copy' }, [title, detail, readout]),
     h('div', { class: 'stage-actions' }, [button]),
     status,
   ]);
 
   let unsubscribe = () => {};
+  let readoutTimer = null;
 
   const sheet = openSheet({
     title: 'Calibration',
@@ -50,11 +57,41 @@ export function openCalibration({ device, posture }) {
     body,
     onClose: () => {
       clearInterval(timer);
+      clearInterval(readoutTimer);
       unsubscribe();
     },
   });
 
   unsubscribe = device.subscribe(render);
+
+  /**
+   * Readings arrive ten times a second but `device.subscribe` only fires on
+   * connection changes, so the live figures are polled instead. Five times a
+   * second is fast enough to look live and slow enough to read.
+   */
+  function updateReadout() {
+    if (phase.name === 'done') {
+      const baseline = posture.calibration;
+      readout.textContent = baseline
+        ? `Your upright posture: pitch ${baseline.pitch.toFixed(1)}°, roll ${baseline.roll.toFixed(1)}°`
+        : '';
+      return;
+    }
+
+    const latest = device.latest;
+    if (!latest) {
+      readout.textContent = device.isUsable ? 'Waiting for the first reading…' : '';
+      return;
+    }
+
+    const now = `Now: pitch ${latest.pitch.toFixed(1)}°, roll ${latest.roll.toFixed(1)}°`;
+    readout.textContent = phase.name === 'measuring'
+      ? `${now} — averaging ${samples.length} reading${samples.length === 1 ? '' : 's'}`
+      : now;
+  }
+
+  readoutTimer = setInterval(updateReadout, 200);
+  updateReadout();
 
   function render() {
     overlay.replaceChildren();
@@ -74,6 +111,8 @@ export function openCalibration({ device, posture }) {
       measuring: 'Averaging your upright angle.',
       done: 'Every angle from now on is measured against this posture. Recalibrate any time from Settings.',
     }[phase.name];
+
+    updateReadout();
 
     button.textContent = {
       intro: 'Start Calibration',
