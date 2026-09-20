@@ -38,6 +38,14 @@ function boot(profile) {
   device.onConnect = () => device.sendBuzzSetting(settings.buzzInterval);
   settings.onBuzzChange = (interval) => device.sendBuzzSetting(interval);
 
+  posture.swapSides = settings.swapSides;
+  settings.onSwapSidesChange = (swap) => {
+    posture.swapSides = swap;
+    // History was recorded the old way round; flipping the switch without
+    // saying so would silently reinterpret every past reading.
+    home.refresh();
+  };
+
   const actions = {
     connect: (options) => device.connect(options),
     connectCloud: (code) => device.connectCloud(code),

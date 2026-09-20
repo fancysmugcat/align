@@ -72,6 +72,9 @@ export class PostureStore {
     this.emitData();
   }
 
+  /** Set from SettingsStore; flips which side a lean is reported on. */
+  swapSides = false;
+
   get isCalibrated() {
     return this.calibration !== null;
   }
@@ -91,7 +94,9 @@ export class PostureStore {
   ingest(reading) {
     if (!this.calibration) return;
 
-    const rollDelta = reading.roll - this.calibration.roll;
+    // Applied here and nowhere else, so the gauge, the lean row and the weekly
+    // bias can never disagree about which side you are on.
+    const rollDelta = (reading.roll - this.calibration.roll) * (this.swapSides ? -1 : 1);
     // Sideways lean only. This used to combine pitch and roll into one total
     // tilt, which meant the number could climb while the wearer hadn't leaned
     // at all — and the gauge, which shows direction on a left-right arc, had
