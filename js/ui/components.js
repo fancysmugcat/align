@@ -143,17 +143,29 @@ export function createPostureArc({
     style: { transition: 'stroke .35s linear' },
   });
 
+  // The readout used to ride the knob, which put the one number that is always
+  // changing on the one element that barely moves when the tilt is mostly
+  // forward — it read as frozen. It sits still now, inside the arc, big enough
+  // to watch from across a desk.
   const label = svg('text', {
-    x: cx, y: cy - r - knobRadius - 10,
+    x: cx, y: cy - 30,
     'text-anchor': 'middle', 'dominant-baseline': 'middle',
-    fill: Theme.ink, 'font-size': 13, 'font-weight': 600,
+    fill: Theme.ink, 'font-size': 30, 'font-weight': 800,
   });
+
+  const caption = svg('text', {
+    x: cx, y: cy - 8,
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    fill: '#8A8A8A', 'font-size': 11, 'font-weight': 600,
+    text: 'off upright',
+  });
+  caption.textContent = 'off upright';
 
   const el = svg('svg', {
     class: 'gauge-arc',
     viewBox: `0 0 ${width} ${height}`,
     role: 'img',
-  }, showKnob ? [track, travelled, knob, label] : [track]);
+  }, showKnob ? [track, travelled, knob, label, caption] : [track]);
 
   /**
    * Position is eased here rather than by CSS.
@@ -208,12 +220,8 @@ export function createPostureArc({
     knob.setAttribute('cy', point.y.toFixed(2));
     knob.setAttribute('stroke', zoneNow.color);
 
-    // The label rides the knob, and at either end of a full sweep that would
-    // hang it off the side of the canvas and clip the text.
-    const margin = 30;
-    label.setAttribute('x', Math.min(Math.max(point.x, margin), width - margin).toFixed(2));
-    label.setAttribute('y', (point.y - knobRadius - 10).toFixed(2));
-    label.textContent = `${Math.round(shownAngle)}° off`;
+    label.textContent = `${Math.round(shownAngle)}°`;
+    label.setAttribute('fill', zoneNow.color);
     el.setAttribute('aria-label', `${Math.round(shownAngle)} degrees from upright`);
   }
 
