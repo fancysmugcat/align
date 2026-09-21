@@ -76,6 +76,12 @@ export class DeviceManager {
     this.battery = null;
     /** Raw millivolts at the sense pin, for checking the divider ratio. */
     this.batteryPinMillivolts = null;
+    /** The board's own report that a motor is running right now. */
+    this.boardBuzzing = false;
+    /** Which write channels the board offered, once connected. */
+    this.channels = null;
+    /** Why the last write failed, if it did. Silence here hid a dead channel. */
+    this.lastWriteError = null;
     this.latest = null;
     this.errorMessage = null;
 
@@ -94,6 +100,8 @@ export class DeviceManager {
     /** Mirrors the site's left/right swap, pushed to the board with the buzz
      *  setting so the motors and the screen name the same side. */
     this.swapSides = false;
+    /** Fire both motors for a bad posture, not just the leaning side. */
+    this.buzzBoth = false;
     /** The wearer's upright roll, pushed to the board so it can buzz on its own. */
     this.baselineRoll = null;
     /** Six-character board code, remembered between visits. */
@@ -305,6 +313,13 @@ export class DeviceManager {
     // Buzz and command are optional — a stripped-down sketch still works.
     this.buzzChar = found.buzz;
     this.commandChar = found.command;
+    // A missing command channel is invisible otherwise: send() returns early
+    // and the button looks like it worked.
+    this.channels = {
+      notify: Boolean(found.notify),
+      buzz: Boolean(found.buzz),
+      command: Boolean(found.command),
+    };
 
     await this.readBatteryService();
 
@@ -398,6 +413,7 @@ export class DeviceManager {
     this.lastPacketAt = reading.timestamp;
     if (reading.battery !== null) this.battery = reading.battery;
     if (reading.pinMillivolts) this.batteryPinMillivolts = reading.pinMillivolts;
+    if (typeof reading.buzzing === 'boolean') this.boardBuzzing = reading.buzzing;
     this.onReading?.(reading);
   }
 
@@ -455,7 +471,14 @@ export class DeviceManager {
 
   // MARK: - Commands
 
-  async sendBuzzSetting(seconds) {
+  /**
+   * @param {number} seconds Buzz duration, 0 for off.
+   * @param {{testSide?: 'left'|'right'|'both'}} options A test pulse rides
+   *   along on this write rather than going through the command
+   *   characteristic, which proved unreliable while this one was demonstrably
+   *   delivering the baseline.
+   */
+  async sendBuzzSetting(seconds, options = {}) {
     if (this.transport === 'cloud') {
       this.cloud?.publishCommand({ buzz: seconds, threshold: BAD_POSTURE_ANGLE });
       return;
@@ -474,15 +497,25 @@ export class DeviceManager {
     // firmware reads byte 0 and ignores the rest, so a one-byte write stays
     // valid.
     const tenths = Math.round(BAD_POSTURE_ANGLE * 10);
-    const bytes = [seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, this.swapSides ? 1 : 0];
+    this.lastBuzzSeconds = seconds;
+    const flags = (this.swapSides ? 0x01 : 0) | (this.buzzBoth ? 0x02 : 0);
+    const bytes = [seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, flags];
 
     // Bytes 4-5: the wearer's upright roll, in tenths of a degree. The board
     // loses its own calibration on every reboot, so sending it with each buzz
     // update keeps a reset board from sitting there unable to decide anyone is
     // leaning while the site shows a perfectly calibrated band.
-    if (typeof this.baselineRoll === 'number' && Number.isFinite(this.baselineRoll)) {
-      const baseline = Math.max(-3200, Math.min(3200, Math.round(this.baselineRoll * 10)));
+    const baselineKnown = typeof this.baselineRoll === 'number' && Number.isFinite(this.baselineRoll);
+    const baseline = baselineKnown
+      ? Math.max(-3200, Math.min(3200, Math.round(this.baselineRoll * 10)))
+      : 0;
+    // Byte 6 needs 4 and 5 present to reach the board, so the baseline slot is
+    // always filled when a test pulse is riding along.
+    if (baselineKnown || options.testSide) {
       bytes.push(baseline & 0xFF, (baseline >> 8) & 0xFF);
+    }
+    if (options.testSide) {
+      bytes.push({ left: 1, right: 2, both: 3 }[options.testSide] ?? 3);
     }
 
     await this.write(
@@ -510,6 +543,13 @@ export class DeviceManager {
       await this.httpCommand(path);
       return;
     }
+    if (command === Command.testLeft || command === Command.testRight || command === Command.testBuzz) {
+      const side = command === Command.testLeft ? 'left'
+        : command === Command.testRight ? 'right' : 'both';
+      await this.sendBuzzSetting(this.lastBuzzSeconds ?? 2, { testSide: side });
+      return;
+    }
+
     if (!this.commandChar) return;
     const text = command === Command.calibrate
       ? TextCommands.calibrate()
@@ -517,17 +557,57 @@ export class DeviceManager {
     await this.write(this.commandChar, Uint8Array.of(command), text);
   }
 
-  /** Raw byte for the ALIGN firmware, a line of ASCII for a serial board. */
+  /**
+   * Raw byte for the ALIGN firmware, a line of ASCII for a serial board.
+   *
+   * Every failure here used to be swallowed on the grounds that no single
+   * setting is critical. That made a completely dead write channel look
+   * exactly like a working one, so a button could do nothing at all with no
+   * trace anywhere. Failures are recorded now, and the newer spelling of
+   * writeValue is tried first — some browsers that add Web Bluetooth to iOS
+   * ship only the newer names.
+   */
   async write(characteristic, bytes, text) {
+    if (!characteristic) {
+      this.lastWriteError = 'that characteristic was not offered by the board';
+      this.listeners.forEach((listener) => listener(this));
+      return false;
+    }
+
     const payload = this.profile?.encoding === 'text'
       ? new TextEncoder().encode(text)
       : bytes;
-    try {
-      if (characteristic.properties.write) await characteristic.writeValue(payload);
-      else await characteristic.writeValueWithoutResponse(payload);
-    } catch {
-      // The device keeps its previous setting; nothing here is critical.
+
+    const attempts = [];
+    if (characteristic.properties.write) {
+      if (typeof characteristic.writeValueWithResponse === 'function') {
+        attempts.push(() => characteristic.writeValueWithResponse(payload));
+      }
+      if (typeof characteristic.writeValue === 'function') {
+        attempts.push(() => characteristic.writeValue(payload));
+      }
     }
+    if (typeof characteristic.writeValueWithoutResponse === 'function') {
+      attempts.push(() => characteristic.writeValueWithoutResponse(payload));
+    }
+    if (typeof characteristic.writeValue === 'function' && attempts.length === 0) {
+      attempts.push(() => characteristic.writeValue(payload));
+    }
+
+    let lastError = null;
+    for (const attempt of attempts) {
+      try {
+        await attempt();
+        this.lastWriteError = null;
+        return true;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    this.lastWriteError = lastError?.message ?? 'no usable write method on this characteristic';
+    this.listeners.forEach((listener) => listener(this));
+    return false;
   }
 
   // MARK: - Cloud

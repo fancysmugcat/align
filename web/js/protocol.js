@@ -144,6 +144,11 @@ export function decodeReading(view) {
       battery: battery >= 0 && battery <= 100 ? battery : null,
       timestamp: new Date(),
     };
+    // Bit 0 of the flags byte is the board saying its own motor is running.
+    // Without it, "nothing happened" cannot be told apart from "the command
+    // never arrived" — the two have completely different fixes.
+    reading.buzzing = (view.getUint8(5) & 0x01) !== 0;
+
     // Optional tail: the raw voltage at the sense pin, before the divider
     // ratio is applied. A percentage on its own can't be checked — if the
     // ratio is wrong it is confidently wrong — but millivolts can be held

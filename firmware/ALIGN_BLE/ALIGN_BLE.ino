@@ -168,6 +168,8 @@ bool calibrated = false;
 // Mirrors Settings -> Device -> "Swap left and right". Without it the screen
 // could say you are leaning right while the left motor buzzed.
 bool swapSides = false;
+/** Fire both motors for a bad posture, instead of just the leaning side. */
+bool buzzBoth = false;
 
 // How many clients have actually subscribed to posture notifications. A
 // connection alone isn't enough — the browser has to write the CCCD too.
@@ -490,9 +492,9 @@ void updateBuzz(unsigned long now) {
     return;
   }
 
-  BuzzSide side = leaningSide();
-  Serial.printf("Bad posture (%.1f deg) — buzzing %s.\n",
-                deviation(), side == BUZZ_RIGHT ? "right" : "left");
+  BuzzSide side = buzzBoth ? BUZZ_BOTH : leaningSide();
+  Serial.printf("Bad posture (%.1f deg) — buzzing %s.\n", deviation(),
+                side == BUZZ_BOTH ? "both" : side == BUZZ_RIGHT ? "right" : "left");
   lastBuzzMs = now;
   startBuzz(now, (unsigned long)buzzSeconds * 1000UL, side);
 }
@@ -552,7 +554,13 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
     // that buzzes is on the side the screen is naming.
     if (value.length() >= 4) {
       swapSides = (value[3] & 0x01) != 0;
-      Serial.printf("Sides are %s.\n", swapSides ? "swapped" : "normal");
+      // Bit 1: fire both motors for a bad posture rather than only the side
+      // being leaned toward. Full feedback on a band where one motor is dead
+      // beats half the corrections going unnoticed.
+      buzzBoth = (value[3] & 0x02) != 0;
+      Serial.printf("Sides are %s; bad posture buzzes %s.\n",
+                    swapSides ? "swapped" : "normal",
+                    buzzBoth ? "both motors" : "the leaning side");
     }
 
     // Bytes 4-5 carry the wearer's upright roll in tenths of a degree, sent
@@ -564,6 +572,29 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
     // no idea what upright was and could never decide anyone was leaning. The
     // motors simply stayed silent, and nothing said why. Handing the baseline
     // over on connect keeps the two from drifting apart at all.
+    // Byte 6: fire one side right now, for testing.
+    //
+    // This lives on the buzz characteristic rather than the command one
+    // because the command channel proved unreliable in the field while this
+    // one was demonstrably delivering the baseline. A test button that cannot
+    // be trusted to arrive is worse than no test button.
+    if (value.length() >= 7 && value[6] != 0) {
+      switch (value[6]) {
+        case 1:
+          Serial.printf("Test pulse: LEFT, GPIO %d.\n", MOTOR_LEFT_PIN);
+          startBuzz(millis(), 600, BUZZ_LEFT);
+          break;
+        case 2:
+          Serial.printf("Test pulse: RIGHT, GPIO %d.\n", MOTOR_RIGHT_PIN);
+          startBuzz(millis(), 600, BUZZ_RIGHT);
+          break;
+        default:
+          Serial.println("Test pulse: BOTH.");
+          startBuzz(millis(), 600, BUZZ_BOTH);
+          break;
+      }
+    }
+
     if (value.length() >= 6) {
       int16_t tenths = (int16_t)(value[4] | (value[5] << 8));
       baseRoll = tenths / 10.0f;
