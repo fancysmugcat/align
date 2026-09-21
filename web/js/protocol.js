@@ -157,6 +157,9 @@ export function decodeReading(view) {
       const millivolts = view.getUint16(8, true);
       if (millivolts > 0) reading.pinMillivolts = millivolts;
     }
+    // The board's count of buzz-characteristic writes it has taken. Compared
+    // with what the site thinks it sent, it says whether a press ever landed.
+    if (view.byteLength >= 11) reading.boardWrites = view.getUint8(10);
     return reading;
   }
 

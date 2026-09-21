@@ -202,8 +202,12 @@ function deviceCard({ device, posture, settings, actions, close }) {
     h('p', { class: 'hint' }, [
       device.boardBuzzing ? 'Board says: a motor is running now. ' : 'Board says: no motor running. ',
       device.channels
-        ? `Channels — readings ${device.channels.notify ? 'yes' : 'NO'}, buzz ${device.channels.buzz ? 'yes' : 'NO'}, commands ${device.channels.command ? 'yes' : 'NO'}.`
+        ? `Channels — readings ${device.channels.notify ? 'yes' : 'NO'}, buzz ${device.channels.buzz ? 'yes' : 'NO'}, commands ${device.channels.command ? 'yes' : 'NO'}. `
         : '',
+      // The receipt. If pressing a button moves "sent" but not "board got",
+      // the write is not arriving; if both move and nothing buzzes, the motor
+      // is dead. Nothing else separates those two.
+      `Writes sent ${device.writesSent}, board got ${device.boardWrites ?? '—'}.`,
     ]),
     device.lastWriteError
       ? h('p', { class: 'hint hint--warn', text: `Last write failed: ${device.lastWriteError}` })

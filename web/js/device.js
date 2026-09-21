@@ -82,6 +82,9 @@ export class DeviceManager {
     this.channels = null;
     /** Why the last write failed, if it did. Silence here hid a dead channel. */
     this.lastWriteError = null;
+    /** Buzz writes this page believes it sent, and the board says it received. */
+    this.writesSent = 0;
+    this.boardWrites = null;
     this.latest = null;
     this.errorMessage = null;
 
@@ -414,6 +417,7 @@ export class DeviceManager {
     if (reading.battery !== null) this.battery = reading.battery;
     if (reading.pinMillivolts) this.batteryPinMillivolts = reading.pinMillivolts;
     if (typeof reading.buzzing === 'boolean') this.boardBuzzing = reading.buzzing;
+    if (typeof reading.boardWrites === 'number') this.boardWrites = reading.boardWrites;
     this.onReading?.(reading);
   }
 
@@ -498,6 +502,7 @@ export class DeviceManager {
     // valid.
     const tenths = Math.round(BAD_POSTURE_ANGLE * 10);
     this.lastBuzzSeconds = seconds;
+    this.writesSent += 1;
     const flags = (this.swapSides ? 0x01 : 0) | (this.buzzBoth ? 0x02 : 0);
     const bytes = [seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, flags];
 

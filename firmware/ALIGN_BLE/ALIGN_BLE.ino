@@ -170,6 +170,14 @@ bool calibrated = false;
 bool swapSides = false;
 /** Fire both motors for a bad posture, instead of just the leaning side. */
 bool buzzBoth = false;
+/**
+ * How many writes the buzz characteristic has taken, sent back in every
+ * reading. "Nothing happened" has meant three different things so far —
+ * the write never left the phone, it left but never arrived, or it arrived
+ * and the motor is dead — and none of them could be told apart from outside.
+ * A number that does or doesn't move when a button is pressed separates them.
+ */
+uint8_t buzzWrites = 0;
 
 // How many clients have actually subscribed to posture notifications. A
 // connection alone isn't enough — the browser has to write the CCCD too.
@@ -537,6 +545,11 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
     const NimBLEAttValue value = c->getValue();
     if (value.length() == 0) return;
 
+    buzzWrites++;
+    Serial.printf("Buzz write #%u, %u bytes:", buzzWrites, (unsigned)value.length());
+    for (size_t i = 0; i < value.length(); i++) Serial.printf(" %02X", value[i]);
+    Serial.println();
+
     int seconds = value[0];
     if (seconds < 0) seconds = 0;
     if (seconds > 60) seconds = 60;
@@ -682,7 +695,7 @@ void notifyPosture() {
   // it doesn't know, so older builds keep working.
   uint16_t pinMv = (batteryPin >= 0) ? (uint16_t)lroundf(rawPinMillivolts()) : 0;
 
-  uint8_t packet[10];
+  uint8_t packet[11];
   packet[0] = p & 0xFF;
   packet[1] = (p >> 8) & 0xFF;
   packet[2] = r & 0xFF;
@@ -694,6 +707,7 @@ void notifyPosture() {
   packet[7] = (sequence >> 8) & 0xFF;
   packet[8] = pinMv & 0xFF;
   packet[9] = (pinMv >> 8) & 0xFF;
+  packet[10] = buzzWrites;
   sequence++;
 
   if (postureChar->notify(packet, sizeof(packet))) notifiesSent++;
