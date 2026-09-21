@@ -56,13 +56,19 @@ static const uint8_t CMD_TEST_RIGHT = 0x04;
 //
 // Set MOTOR_RIGHT_PIN to -1 for a band with a single motor; it then buzzes for
 // either direction, as it did before.
-// Found with the buzz-counting finder sketch: GPIO 0 pulsed three times and it
-// was the right-hand motor that answered, leaving GPIO 4 as the left. The
-// battery probe had already hinted at it — GPIO 0 read 1.89V with a 1.15V
-// spread, the noisiest of the four, which is a motor coil rather than a
-// floating input.
+// One motor, on GPIO 4, physically on the right of the band. Every route
+// through GPIO 4 buzzes it — the test button and a lean alike — and every
+// route through GPIO 0 is silent, so nothing is wired there.
+//
+// I read the finder sketch wrong before: "three buzzes, on the right" was
+// taken to mean GPIO 0 drove the right motor, when GPIO 4 was driving it the
+// whole time and GPIO 0 was pulsing nothing.
+//
+// With RIGHT set to -1 the single motor answers for both directions, so a
+// lean either way is still felt. The side cue is gone until a second motor is
+// found — use "Find a motor" in Settings to hunt for its pin.
 const int MOTOR_LEFT_PIN  = 4;
-const int MOTOR_RIGHT_PIN = 0;
+const int MOTOR_RIGHT_PIN = -1;
 
 /** Kept for the pin probes, which must avoid anything already driving a motor. */
 const int MOTOR_PIN = MOTOR_LEFT_PIN;
