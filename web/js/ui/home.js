@@ -16,18 +16,18 @@ const LEAN_FULL_SCALE = 30;
  * `refresh()` redraws everything that depends on history or connection state;
  * `updateLive()` only moves the gauge, which changes ~10x a second.
  */
-export function createHome({ posture, device, actions }) {
+export function createHome({ posture, device, settings, actions }) {
   let range = HistoryRange.week;
 
   const banners = h('div', { class: 'banners', style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
   const streak = createStreakCard(posture);
-  const angle = createAngleCard(posture, device);
+  const angle = createAngleCard(posture, device, settings);
   const progress = createProgressCard(posture, () => range, (next) => {
     range = next;
     progress.refresh();
     lean.refresh();
   });
-  const lean = createLeanCard(posture, () => range);
+  const lean = createLeanCard(posture, () => range, settings);
 
   const el = h('div', {
     style: { display: 'flex', flexDirection: 'column', gap: '14px' },
@@ -241,8 +241,11 @@ function createStreakCard(posture) {
 // MARK: - Current angle
 
 /** Live angle gauge with a good/bad verdict. */
-function createAngleCard(posture, device) {
-  const arc = createPostureArc({ arcHeight: 92, lineWidth: 18 });
+function createAngleCard(posture, device, settings) {
+  const arc = createPostureArc({
+    arcHeight: 92, lineWidth: 18,
+    deadband: () => settings?.sensitivity?.deadband ?? 3,
+  });
   const gauge = h('div', { class: 'gauge' }, [arc.el, silhouette(74)]);
 
   const dot = h('span', { class: 'verdict-dot' });
@@ -382,7 +385,7 @@ function stat(value, label) {
 // MARK: - Lean
 
 /** Which side the user drifts toward most often. */
-function createLeanCard(posture, getRange) {
+function createLeanCard(posture, getRange, settings) {
   const subtitle = h('p', { class: 'card-subtitle' });
   const heading = h('div', { class: 'card-heading' }, [
     h('h2', { class: 'card-title', text: 'Left or Right?' }),
@@ -434,7 +437,7 @@ function createLeanCard(posture, getRange) {
     // Roll is already relative to the calibrated upright, so a board mounted
     // slightly off-square doesn't read as a permanent lean.
     const roll = sample.roll;
-    const side = leanFor(roll);
+    const side = leanFor(roll, settings?.sensitivity?.leanThreshold);
     liveLabel.textContent = side === LeanSide.left
       ? 'Leaning left'
       : side === LeanSide.right ? 'Leaning right' : 'Centred';

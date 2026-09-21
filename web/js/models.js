@@ -65,10 +65,42 @@ export const LeanSide = { left: 'left', right: 'right', center: 'center' };
  */
 export const LEAN_THRESHOLD = 6;
 
-export function leanFor(roll) {
-  if (roll <= -LEAN_THRESHOLD) return LeanSide.left;
-  if (roll >= LEAN_THRESHOLD) return LeanSide.right;
+export function leanFor(roll, threshold = LEAN_THRESHOLD) {
+  if (roll <= -threshold) return LeanSide.left;
+  if (roll >= threshold) return LeanSide.right;
   return LeanSide.center;
+}
+
+/**
+ * How twitchy the readings are allowed to be.
+ *
+ * Three numbers move together here: how hard the board filters its own
+ * accelerometer, how small a change the readout bothers to show, and how far
+ * counts as a lean rather than ordinary sway. Tuning them by guess took three
+ * rounds of "too slow" and "too sensitive", so they are a setting instead.
+ *
+ * `smoothing` is the board's filter coefficient: higher is calmer and slower.
+ */
+export const SENSITIVITY = {
+  calm: {
+    id: 'calm', label: 'Calm',
+    smoothing: 0.82, deadband: 4, leanThreshold: 8,
+  },
+  normal: {
+    id: 'normal', label: 'Normal',
+    smoothing: 0.70, deadband: 3, leanThreshold: 6,
+  },
+  quick: {
+    id: 'quick', label: 'Quick',
+    smoothing: 0.55, deadband: 2, leanThreshold: 4,
+  },
+};
+
+export const ALL_SENSITIVITIES = [SENSITIVITY.calm, SENSITIVITY.normal, SENSITIVITY.quick];
+
+/** Board filter coefficient as a whole percent, which is how it crosses BLE. */
+export function smoothingPercent(level) {
+  return Math.max(1, Math.min(94, Math.round((level?.smoothing ?? 0.7) * 100)));
 }
 
 // MARK: - Ranges

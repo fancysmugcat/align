@@ -1,4 +1,4 @@
-import { BUZZ_INTERVALS, buzzLabel, buzzDetail } from '../models.js';
+import { BUZZ_INTERVALS, buzzLabel, buzzDetail, ALL_SENSITIVITIES } from '../models.js';
 import { DeviceManager, isIOS, IOS_BLUETOOTH_BROWSER } from '../device.js';
 import { ALIGNProtocol } from '../protocol.js';
 import { SheetSync } from '../sync.js';
@@ -33,6 +33,7 @@ export function openSettings({ device, posture, settings, sync, profile, actions
     body.replaceChildren(
       profileCard({ profile, actions }),
       batteryCard(device),
+      sensitivityCard(settings),
       buzzCard(settings),
       deviceCard({ device, posture, settings, actions, close: sheet.close }),
       issuesSection(settings),
@@ -120,6 +121,35 @@ function batteryCard(device) {
 }
 
 // MARK: - Buzz
+
+function sensitivityCard(settings) {
+  const level = settings.sensitivity;
+  return card({ title: 'Sensitivity' }, [
+    segmentedPill({
+      options: ALL_SENSITIVITIES,
+      label: (option) => option.label,
+      selection: ALL_SENSITIVITIES.find((option) => option.id === level.id),
+      onSelect: (option) => { settings.sensitivity = option; },
+      trackColor: Theme.track,
+      knobColor: '#FFFFFF',
+      selectedTextColor: Theme.ink,
+      textColor: '#F2F2F2',
+      ariaLabel: 'Reading sensitivity',
+    }),
+    h('p', {
+      class: 'hint',
+      text: level.id === 'calm'
+        ? 'Steadiest. Ignores small movements and takes about a second and a half to follow a real one.'
+        : level.id === 'quick'
+          ? 'Follows you closely, at the cost of the reading twitching while you sit still.'
+          : 'A middle setting: settles in under a second and ignores ordinary sway.',
+    }),
+    h('p', {
+      class: 'hint',
+      text: `Below ${level.leanThreshold}° counts as centred, and the angle reads zero under ${level.deadband}°. This also sets how hard the board filters its own accelerometer.`,
+    }),
+  ]);
+}
 
 function buzzCard(settings) {
   return card({ title: 'Buzz Adjustment' }, [

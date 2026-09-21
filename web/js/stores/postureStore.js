@@ -86,6 +86,8 @@ export class PostureStore {
 
   /** Set from SettingsStore; flips which side a lean is reported on. */
   swapSides = false;
+  /** Degrees of roll below which a lean is ordinary sway. From Sensitivity. */
+  leanThreshold = undefined;
 
   get isCalibrated() {
     return this.calibration !== null;
@@ -271,7 +273,7 @@ export class PostureStore {
       const key = startOfDay(sample.date).getTime();
       const bucket = buckets.get(key) ?? { good: 0, left: 0, right: 0 };
       if (zoneFor(sample.angle).isGood) bucket.good += 1;
-      const side = leanFor(sample.roll);
+      const side = leanFor(sample.roll, this.leanThreshold);
       if (side === LeanSide.left) bucket.left += 1;
       else if (side === LeanSide.right) bucket.right += 1;
       buckets.set(key, bucket);
@@ -371,7 +373,7 @@ export class PostureStore {
     let left = 0;
     let right = 0;
     for (const sample of window) {
-      const side = leanFor(sample.roll);
+      const side = leanFor(sample.roll, this.leanThreshold);
       if (side === LeanSide.left) left += 1;
       else if (side === LeanSide.right) right += 1;
     }

@@ -110,11 +110,11 @@ const unsigned long BUZZ_COOLDOWN_MS     = 10000;
 // Hard ceiling on one buzz, whatever the website asks for.
 const unsigned long MAX_BUZZ_MS          = 5000;
 
-// Raising this trades responsiveness for calm. The history here: 0.75 dragged
-// visibly, 0.45 passed enough accelerometer noise that the reading twitched on
-// a still band, 0.62 was still reported as too sensitive. 0.70 settles in
-// about eight tenths of a second.
-const float SMOOTHING = 0.70;               // 0 = raw, 0.9 = heavily smoothed
+// How hard the accelerometer is filtered, set from the site rather than
+// compiled in. Guessing a constant went "too slow", then "too sensitive",
+// then "too sensitive" again across three flashes — the wearer can feel the
+// right answer and nobody here can, so Settings -> Sensitivity drives it.
+float smoothing = 0.70f;                    // 0 = raw, 0.9 = heavily smoothed
 
 // ---------------------------------------------------------------- state
 
@@ -350,8 +350,8 @@ void readTilt() {
       return;                       // keep the last angles; don't invent one
     }
     imuFailStreak = 0;
-    pitch = SMOOTHING * pitch + (1 - SMOOTHING) * p;
-    roll  = SMOOTHING * roll  + (1 - SMOOTHING) * r;
+    pitch = smoothing * pitch + (1 - smoothing) * p;
+    roll  = smoothing * roll  + (1 - smoothing) * r;
     return;
   }
 
@@ -362,8 +362,8 @@ void readTilt() {
   float pitchDeg = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
   float rollDeg  = atan2(ay, az) * 180.0 / PI;
 
-  pitch = SMOOTHING * pitch + (1 - SMOOTHING) * pitchDeg;
-  roll  = SMOOTHING * roll  + (1 - SMOOTHING) * rollDeg;
+  pitch = smoothing * pitch + (1 - smoothing) * pitchDeg;
+  roll  = smoothing * roll  + (1 - smoothing) * rollDeg;
 }
 
 // Sideways lean only, matching the website. Combining pitch and roll here made
@@ -649,6 +649,12 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
         badSinceMs = 0;
         Serial.printf("Baseline from the site: upright roll %.1f deg.\n", baseRoll);
       }
+    }
+
+    // Byte 7: the accelerometer filter, as a whole percent.
+    if (value.length() >= 8 && value[7] > 0 && value[7] < 95) {
+      smoothing = value[7] / 100.0f;
+      Serial.printf("Smoothing set to %.2f.\n", smoothing);
     }
 
     Serial.printf("Buzz set to %.1fs past %.1f degrees.\n",
