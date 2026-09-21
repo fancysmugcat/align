@@ -91,6 +91,9 @@ export class DeviceManager {
 
     /** The live MQTT subscription, in cloud mode. */
     this.cloud = null;
+    /** Mirrors the site's left/right swap, pushed to the board with the buzz
+     *  setting so the motors and the screen name the same side. */
+    this.swapSides = false;
     /** Six-character board code, remembered between visits. */
     this.cloudCode = readStoredCode();
     this.staleTimer = null;
@@ -464,12 +467,14 @@ export class DeviceManager {
       return;
     }
     // Byte 0 is the duration in seconds; bytes 1-2 carry the bad-posture angle
-    // in tenths of a degree, little-endian. Older firmware reads byte 0 and
-    // ignores the rest, so a one-byte write stays valid.
+    // in tenths of a degree, little-endian; byte 3 mirrors the left/right swap
+    // so the motor that fires is on the side the screen is naming. Older
+    // firmware reads byte 0 and ignores the rest, so a one-byte write stays
+    // valid.
     const tenths = Math.round(BAD_POSTURE_ANGLE * 10);
     await this.write(
       this.buzzChar,
-      Uint8Array.of(seconds, tenths & 0xFF, (tenths >> 8) & 0xFF),
+      Uint8Array.of(seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, this.swapSides ? 1 : 0),
       TextCommands.buzz(seconds, BAD_POSTURE_ANGLE),
     );
   }
