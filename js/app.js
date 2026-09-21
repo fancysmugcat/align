@@ -35,11 +35,28 @@ function boot(profile) {
    * posture store -> Google Sheet.
    */
   device.onReading = (reading) => posture.ingest(reading);
-  device.onConnect = () => device.sendBuzzSetting(settings.buzzInterval);
+  device.onConnect = () => {
+    device.baselineRoll = posture.calibration ? posture.calibration.roll : null;
+    device.sendBuzzSetting(settings.buzzInterval);
+  };
   settings.onBuzzChange = (interval) => device.sendBuzzSetting(interval);
 
   posture.swapSides = settings.swapSides;
   device.swapSides = settings.swapSides;
+
+  /**
+   * Keeps the board's idea of upright in step with the site's.
+   *
+   * The board drops its calibration on every reboot and the site does not, so
+   * without this a reset board shows a calibrated app, correct angles, and
+   * motors that can never fire.
+   */
+  function pushBaseline() {
+    const roll = posture.calibration ? posture.calibration.roll : null;
+    if (roll === device.baselineRoll) return;
+    device.baselineRoll = roll;
+    if (device.isUsable) device.sendBuzzSetting(settings.buzzInterval);
+  }
   settings.onSwapSidesChange = (swap) => {
     posture.swapSides = swap;
     device.swapSides = swap;
@@ -120,6 +137,7 @@ function boot(profile) {
 
   let dataPending = false;
   posture.onData(() => {
+    pushBaseline();
     sync.markDirty();
     if (dataPending) return;
     dataPending = true;

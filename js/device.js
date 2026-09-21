@@ -94,6 +94,8 @@ export class DeviceManager {
     /** Mirrors the site's left/right swap, pushed to the board with the buzz
      *  setting so the motors and the screen name the same side. */
     this.swapSides = false;
+    /** The wearer's upright roll, pushed to the board so it can buzz on its own. */
+    this.baselineRoll = null;
     /** Six-character board code, remembered between visits. */
     this.cloudCode = readStoredCode();
     this.staleTimer = null;
@@ -472,9 +474,20 @@ export class DeviceManager {
     // firmware reads byte 0 and ignores the rest, so a one-byte write stays
     // valid.
     const tenths = Math.round(BAD_POSTURE_ANGLE * 10);
+    const bytes = [seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, this.swapSides ? 1 : 0];
+
+    // Bytes 4-5: the wearer's upright roll, in tenths of a degree. The board
+    // loses its own calibration on every reboot, so sending it with each buzz
+    // update keeps a reset board from sitting there unable to decide anyone is
+    // leaning while the site shows a perfectly calibrated band.
+    if (typeof this.baselineRoll === 'number' && Number.isFinite(this.baselineRoll)) {
+      const baseline = Math.max(-3200, Math.min(3200, Math.round(this.baselineRoll * 10)));
+      bytes.push(baseline & 0xFF, (baseline >> 8) & 0xFF);
+    }
+
     await this.write(
       this.buzzChar,
-      Uint8Array.of(seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, this.swapSides ? 1 : 0),
+      Uint8Array.from(bytes),
       TextCommands.buzz(seconds, BAD_POSTURE_ANGLE),
     );
   }
