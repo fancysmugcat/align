@@ -115,6 +115,7 @@ export const TextCommands = {
  *     [4]    uint8  battery percent (0...100)
  *     [5]    uint8  flags (bit 0: device-side buzz active)
  *     [6..7] uint16 sequence number (unused here)
+ *     [8..9] uint16 sense-pin millivolts, before the divider (optional)
  *
  * …and any line of text carrying two or three numbers, so a sketch that just
  * prints `12.3,-4.5` — or `pitch: 12.3 roll: -4.5 batt: 80` — works without
@@ -134,12 +135,21 @@ export function decodeReading(view) {
 
   if (view.byteLength >= 6) {
     const battery = view.getUint8(4);
-    return {
+    const reading = {
       pitch: view.getInt16(0, true) / 100,
       roll: view.getInt16(2, true) / 100,
       battery: battery >= 0 && battery <= 100 ? battery : null,
       timestamp: new Date(),
     };
+    // Optional tail: the raw voltage at the sense pin, before the divider
+    // ratio is applied. A percentage on its own can't be checked — if the
+    // ratio is wrong it is confidently wrong — but millivolts can be held
+    // against a meter. Older firmware simply doesn't send these bytes.
+    if (view.byteLength >= 10) {
+      const millivolts = view.getUint16(8, true);
+      if (millivolts > 0) reading.pinMillivolts = millivolts;
+    }
+    return reading;
   }
 
   return null;
