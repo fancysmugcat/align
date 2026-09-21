@@ -555,6 +555,25 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
       Serial.printf("Sides are %s.\n", swapSides ? "swapped" : "normal");
     }
 
+    // Bytes 4-5 carry the wearer's upright roll in tenths of a degree, sent
+    // every time the site connects.
+    //
+    // The board forgets `calibrated` on every reboot while the site keeps its
+    // baseline in storage, so after a reset the site showed a calibrated band
+    // and correct angles — it subtracts its own baseline — while the board had
+    // no idea what upright was and could never decide anyone was leaning. The
+    // motors simply stayed silent, and nothing said why. Handing the baseline
+    // over on connect keeps the two from drifting apart at all.
+    if (value.length() >= 6) {
+      int16_t tenths = (int16_t)(value[4] | (value[5] << 8));
+      baseRoll = tenths / 10.0f;
+      if (!calibrated) {
+        calibrated = true;
+        badSinceMs = 0;
+        Serial.printf("Baseline from the site: upright roll %.1f deg.\n", baseRoll);
+      }
+    }
+
     Serial.print("Buzz set to ");
     Serial.print(buzzSeconds);
     Serial.print("s past ");
