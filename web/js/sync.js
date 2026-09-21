@@ -1,8 +1,11 @@
 import { SHEET_WEB_APP_URL, SHEET_URL, SYNC_INTERVAL_MINUTES, SYNC_WINDOW_DAYS } from './config.js';
 import { readJSON, writeJSON, removeKey } from './stores/storage.js';
+import { qualityLabel } from './models.js';
 
 const ENDPOINT_KEY = 'align.sheetEndpoint';
 const LAST_SYNC_KEY = 'align.lastSync';
+/** Newest reading already written, so a sync only sends what is new. */
+const HIGH_WATER_KEY = 'align.lastReadingSent';
 
 /**
  * Pushes each profile's daily rollups into the ALIGN Google Sheet.
@@ -126,9 +129,23 @@ export class SheetSync {
         rightShare: round(day.rightShare, 4),
       }));
 
+    // One row per reading: who, when, how far, and the traffic light. Ten
+    // seconds apart, so only what is new since the last successful sync goes
+    // up — resending a fortnight every few minutes would be tens of thousands
+    // of rows for no gain.
+    const since = readJSON(scopedHighWater(this.profile.id));
+    const readings = this.posture.samplesSince(since).map((sample) => ({
+      at: sample.date.toISOString(),
+      date: isoDate(sample.date),
+      time: clockTime(sample.date),
+      angle: round(sample.angle, 1),
+      quality: qualityLabel(sample.angle),
+    }));
+
     return {
-      version: 1,
+      version: 2,
       sentAt: new Date().toISOString(),
+      readings,
       profile: {
         id: this.profile.id,
         name: this.profile.name,
@@ -157,7 +174,7 @@ export class SheetSync {
     }
 
     const payload = this.buildPayload();
-    if (payload.days.length === 0) {
+    if (payload.days.length === 0 && payload.readings.length === 0) {
       this.message = 'Nothing recorded to send yet.';
       this.status = SheetSync.Status.idle;
       this.emit();
@@ -171,8 +188,14 @@ export class SheetSync {
       const result = await post(endpoint, payload);
       this.dirty = false;
       writeJSON(LAST_SYNC_KEY, new Date().toISOString());
+      // Only advance once the sheet has confirmed the write, or a failed sync
+      // would silently drop the readings it was carrying.
+      const newest = payload.readings[payload.readings.length - 1];
+      if (newest) writeJSON(scopedHighWater(this.profile.id), newest.at);
       this.status = SheetSync.Status.ok;
-      this.message = result.rows ? `${result.rows} day${result.rows === 1 ? '' : 's'} written.` : '';
+      this.message = result.rows
+        ? `${result.rows} row${result.rows === 1 ? '' : 's'} written.`
+        : `${payload.readings.length} reading${payload.readings.length === 1 ? '' : 's'} sent.`;
       this.emit();
       return { ok: true, message: this.message };
     } catch (error) {
@@ -188,7 +211,7 @@ export class SheetSync {
     const endpoint = this.endpoint;
     if (!endpoint || !this.dirty) return;
     const payload = this.buildPayload();
-    if (payload.days.length === 0) return;
+    if (payload.days.length === 0 && payload.readings.length === 0) return;
 
     try {
       // text/plain keeps this a simple request, which Apps Script accepts
@@ -241,4 +264,15 @@ function isoDate(date) {
 function round(value, places) {
   const factor = 10 ** places;
   return Math.round(value * factor) / factor;
+}
+
+/** The high-water mark is per profile, like everything else stored. */
+function scopedHighWater(profileId) {
+  return `${HIGH_WATER_KEY}:${profileId}`;
+}
+
+/** Local wall-clock time, which is what a person reading the sheet wants. */
+function clockTime(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }

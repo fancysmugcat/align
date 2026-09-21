@@ -148,11 +148,20 @@ export function readJSON(key) {
   }
 }
 
+/**
+ * @returns {boolean} whether it actually stuck.
+ *
+ * Failures used to be swallowed outright, so a browser refusing storage —
+ * private browsing, a full quota, an app that clears site data between
+ * launches — looked exactly like a successful save. Signing in appeared to
+ * work and the profile was simply gone on the next visit, with nothing said.
+ */
 export function writeJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    // Ignore.
+    return false;
   }
 }
 

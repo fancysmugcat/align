@@ -305,6 +305,16 @@ export class PostureStore {
     return window.filter((sample) => zoneFor(sample.angle).isGood).length / window.length;
   }
 
+  /**
+   * Every reading newer than `since`, oldest first, capped so one sync can't
+   * try to push a whole month at ten samples a minute.
+   */
+  samplesSince(since, limit = 2000) {
+    const after = since ? new Date(since).getTime() : 0;
+    const fresh = this.samples.filter((sample) => sample.date.getTime() > after);
+    return fresh.slice(0, limit);
+  }
+
   samplesWithin(range) {
     // "Today" means since midnight, not a rolling 24 hours — otherwise the
     // card would still be counting last night's samples this morning. A

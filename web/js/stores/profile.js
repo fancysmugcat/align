@@ -39,9 +39,16 @@ export function createProfile({ name, email = '' }) {
   return profile;
 }
 
+/**
+ * @returns {boolean} whether the sign-in will survive a reload.
+ *
+ * Read back rather than trusted: a write that quietly fails leaves the wearer
+ * signed in for exactly as long as the page stays open.
+ */
 export function signIn(profileId) {
   writeJSON(ACTIVE_KEY, profileId);
   touchProfile(profileId);
+  return readJSON(ACTIVE_KEY) === profileId;
 }
 
 export function signOut() {

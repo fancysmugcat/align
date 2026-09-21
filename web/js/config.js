@@ -21,7 +21,7 @@
 export const SHEET_WEB_APP_URL = '';
 
 /** The spreadsheet the Apps Script writes into — linked from Settings. */
-export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1c_eGhhe6cjcHa3_eNffbmaz8KT7xVE_XTLFEbAm0bzs/edit';
+export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1uoke7yfkuou37s75tvZF1xvu19eIY8lukysSukW_YSk/edit';
 
 /** How often a signed-in profile pushes new readings up, in minutes. */
 export const SYNC_INTERVAL_MINUTES = 5;
