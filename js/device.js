@@ -516,10 +516,12 @@ export class DeviceManager {
       : 0;
     // Byte 6 needs 4 and 5 present to reach the board, so the baseline slot is
     // always filled when a test pulse is riding along.
-    if (baselineKnown || options.testSide) {
+    if (baselineKnown || options.testSide || typeof options.probePin === 'number') {
       bytes.push(baseline & 0xFF, (baseline >> 8) & 0xFF);
     }
-    if (options.testSide) {
+    if (typeof options.probePin === 'number') {
+      bytes.push(10 + options.probePin);
+    } else if (options.testSide) {
       bytes.push({ left: 1, right: 2, both: 3 }[options.testSide] ?? 3);
     }
 
@@ -528,6 +530,11 @@ export class DeviceManager {
       Uint8Array.from(bytes),
       TextCommands.buzz(seconds, BAD_POSTURE_ANGLE),
     );
+  }
+
+  /** Pulses one GPIO for half a second, to find which pin a motor is on. */
+  async probeMotorPin(pin) {
+    await this.sendBuzzSetting(this.lastBuzzSeconds ?? 2, { probePin: pin });
   }
 
   async send(command) {
