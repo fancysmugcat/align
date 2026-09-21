@@ -351,8 +351,37 @@ function issuesSection(settings) {
 // MARK: - Data
 
 function dataSection(posture, sync) {
+  const field = h('input', {
+    type: 'text', class: 'field',
+    value: SheetSync.storedEndpoint,
+    placeholder: 'https://script.google.com/macros/s/…/exec',
+    'aria-label': 'Apps Script deployment URL',
+    spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off',
+  });
+  const note = h('p', { class: 'hint' });
+
   return h('section', { class: 'section' }, [
     h('h3', { class: 'section-title', text: 'Data' }),
+    // Entered here rather than committed to config.js: the repository is
+    // public, and whoever holds this URL can post rows into the sheet.
+    h('p', { class: 'section-detail', text: 'Google Sheet' }),
+    h('div', { class: 'endpoint-row' }, [
+      field,
+      h('button', {
+        type: 'button', class: 'pill-button', text: 'Save',
+        onClick: () => {
+          const result = SheetSync.setEndpoint(field.value);
+          note.textContent = result.message;
+          note.classList.toggle('hint--warn', !result.ok);
+          if (result.ok) sync.syncNow({ silent: false });
+        },
+      }),
+    ]),
+    note,
+    h('p', {
+      class: 'hint',
+      text: 'The deployment URL from Extensions → Apps Script → Deploy → Web app. Kept on this device only, so it is not published with the site — enter it again on each device you use.',
+    }),
     h('button', {
       type: 'button', class: 'link-button', text: 'Load demo data',
       onClick: () => posture.loadSampleData(),
