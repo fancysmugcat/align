@@ -52,8 +52,13 @@ static const uint8_t CMD_TEST_BUZZ = 0x02;
 //
 // Set MOTOR_RIGHT_PIN to -1 for a band with a single motor; it then buzzes for
 // either direction, as it did before.
+// Found with the buzz-counting finder sketch: GPIO 0 pulsed three times and it
+// was the right-hand motor that answered, leaving GPIO 4 as the left. The
+// battery probe had already hinted at it — GPIO 0 read 1.89V with a 1.15V
+// spread, the noisiest of the four, which is a motor coil rather than a
+// floating input.
 const int MOTOR_LEFT_PIN  = 4;
-const int MOTOR_RIGHT_PIN = 5;
+const int MOTOR_RIGHT_PIN = 0;
 
 /** Kept for the pin probes, which must avoid anything already driving a motor. */
 const int MOTOR_PIN = MOTOR_LEFT_PIN;
