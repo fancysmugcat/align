@@ -39,8 +39,13 @@ function boot(profile) {
   settings.onBuzzChange = (interval) => device.sendBuzzSetting(interval);
 
   posture.swapSides = settings.swapSides;
+  device.swapSides = settings.swapSides;
   settings.onSwapSidesChange = (swap) => {
     posture.swapSides = swap;
+    device.swapSides = swap;
+    // The board decides which motor to buzz, so it has to be told too —
+    // otherwise the screen says one side and the band vibrates on the other.
+    device.sendBuzzSetting(settings.buzzInterval);
     // History was recorded the old way round; flipping the switch without
     // saying so would silently reinterpret every past reading.
     home.refresh();

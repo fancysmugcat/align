@@ -46,7 +46,19 @@ static const uint8_t CMD_TEST_BUZZ = 0x02;
 
 // ---------------------------------------------------------------- pins
 
-const int MOTOR_PIN = 4;
+// One motor either side of the spine. Only the one on the side you are leaning
+// toward fires, so the buzz says which way to correct without having to be
+// interpreted — you straighten away from whichever side is humming.
+//
+// Set MOTOR_RIGHT_PIN to -1 for a band with a single motor; it then buzzes for
+// either direction, as it did before.
+const int MOTOR_LEFT_PIN  = 4;
+const int MOTOR_RIGHT_PIN = 5;
+
+/** Kept for the pin probes, which must avoid anything already driving a motor. */
+const int MOTOR_PIN = MOTOR_LEFT_PIN;
+
+enum BuzzSide { BUZZ_LEFT, BUZZ_RIGHT, BUZZ_BOTH };
 const int SDA_PIN   = 6;
 const int SCL_PIN   = 7;
 
@@ -144,6 +156,10 @@ uint16_t sequence = 0;
 // board lying on a desk reads far off a baseline of zero and buzzes forever.
 bool calibrated = false;
 
+// Mirrors Settings -> Device -> "Swap left and right". Without it the screen
+// could say you are leaning right while the left motor buzzed.
+bool swapSides = false;
+
 // How many clients have actually subscribed to posture notifications. A
 // connection alone isn't enough — the browser has to write the CCCD too.
 uint16_t subscriberCount = 0;
@@ -179,7 +195,8 @@ unsigned long notifiesFailed = 0;
  */
 bool findIMU() {
   for (const I2CPins &pins : I2C_CANDIDATES) {
-    if (pins.sda == MOTOR_PIN || pins.scl == MOTOR_PIN) continue;
+    if (pins.sda == MOTOR_LEFT_PIN || pins.scl == MOTOR_LEFT_PIN) continue;
+    if (MOTOR_RIGHT_PIN >= 0 && (pins.sda == MOTOR_RIGHT_PIN || pins.scl == MOTOR_RIGHT_PIN)) continue;
 
     Wire.end();
     if (!Wire.begin(pins.sda, pins.scl)) continue;
@@ -353,7 +370,8 @@ void findBatteryPin() {
   if (BATTERY_PIN >= 0) { batteryPin = BATTERY_PIN; return; }
 
   for (int pin : BATTERY_CANDIDATES) {
-    if (pin == MOTOR_PIN || pin == sdaPin || pin == sclPin) continue;
+    if (pin == MOTOR_LEFT_PIN || pin == MOTOR_RIGHT_PIN) continue;
+    if (pin == sdaPin || pin == sclPin) continue;
     float spread = 0;
     float volts = readPinVolts(pin, &spread);
     Serial.printf("  battery probe GPIO %d: %.2f V (spread %.2f V)\n", pin, volts, spread);
@@ -394,16 +412,40 @@ int batteryPercent() {
 
 // ---------------------------------------------------------------- buzzing
 
-void startBuzz(unsigned long now, unsigned long durationMs) {
+void motorsOff() {
+  digitalWrite(MOTOR_LEFT_PIN, LOW);
+  if (MOTOR_RIGHT_PIN >= 0) digitalWrite(MOTOR_RIGHT_PIN, LOW);
+}
+
+void startBuzz(unsigned long now, unsigned long durationMs, BuzzSide side) {
   if (durationMs > MAX_BUZZ_MS) durationMs = MAX_BUZZ_MS;
   buzzUntilMs = now + durationMs;
-  digitalWrite(MOTOR_PIN, HIGH);
+
+  // With one motor fitted it answers for both sides, so a single-motor band
+  // keeps working exactly as it did rather than going silent on one side.
+  const bool single = (MOTOR_RIGHT_PIN < 0);
+  motorsOff();
+  if (single || side == BUZZ_BOTH) {
+    digitalWrite(MOTOR_LEFT_PIN, HIGH);
+    if (!single) digitalWrite(MOTOR_RIGHT_PIN, HIGH);
+  } else if (side == BUZZ_RIGHT) {
+    digitalWrite(MOTOR_RIGHT_PIN, HIGH);
+  } else {
+    digitalWrite(MOTOR_LEFT_PIN, HIGH);
+  }
+}
+
+/** Which way the wearer is leaning, as the website reports it. */
+BuzzSide leaningSide() {
+  float lean = roll - baseRoll;
+  if (swapSides) lean = -lean;
+  return lean >= 0 ? BUZZ_RIGHT : BUZZ_LEFT;
 }
 
 // Non-blocking: a delay() here would stall the BLE stack for the whole buzz.
 void updateBuzz(unsigned long now) {
   if (buzzUntilMs != 0 && now >= buzzUntilMs) {
-    digitalWrite(MOTOR_PIN, LOW);
+    motorsOff();
     buzzUntilMs = 0;
   }
   if (buzzSeconds == 0) return;
@@ -420,9 +462,11 @@ void updateBuzz(unsigned long now) {
   if (now - badSinceMs < BAD_POSTURE_GRACE_MS) return;
   if (now - lastBuzzMs < BUZZ_COOLDOWN_MS) return;
 
-  Serial.println("Bad posture — buzzing.");
+  BuzzSide side = leaningSide();
+  Serial.printf("Bad posture (%.1f deg) — buzzing %s.\n",
+                deviation(), side == BUZZ_RIGHT ? "right" : "left");
   lastBuzzMs = now;
-  startBuzz(now, (unsigned long)buzzSeconds * 1000UL);
+  startBuzz(now, (unsigned long)buzzSeconds * 1000UL, side);
 }
 
 // ---------------------------------------------------------------- BLE
@@ -476,6 +520,13 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
       if (degrees >= 5.0f && degrees <= 45.0f) tiltThreshold = degrees;
     }
 
+    // Byte 3, when present, mirrors the site's left/right swap so the motor
+    // that buzzes is on the side the screen is naming.
+    if (value.length() >= 4) {
+      swapSides = (value[3] & 0x01) != 0;
+      Serial.printf("Sides are %s.\n", swapSides ? "swapped" : "normal");
+    }
+
     Serial.print("Buzz set to ");
     Serial.print(buzzSeconds);
     Serial.print("s past ");
@@ -497,11 +548,11 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
         badSinceMs = 0;
         Serial.println("Calibrated: this is upright.");
         // A short buzz is how the wearer knows it took.
-        startBuzz(millis(), 300);
+        startBuzz(millis(), 300, BUZZ_BOTH);
         break;
       case CMD_TEST_BUZZ:
         Serial.println("Test buzz.");
-        startBuzz(millis(), 400);
+        startBuzz(millis(), 400, BUZZ_BOTH);
         break;
       default:
         Serial.print("Unknown command byte 0x");
@@ -616,8 +667,9 @@ void setup() {
   delay(1000);
 
   // Pins and chip are both probed — see findIMU().
-  pinMode(MOTOR_PIN, OUTPUT);
-  digitalWrite(MOTOR_PIN, LOW);
+  pinMode(MOTOR_LEFT_PIN, OUTPUT);
+  if (MOTOR_RIGHT_PIN >= 0) pinMode(MOTOR_RIGHT_PIN, OUTPUT);
+  motorsOff();
 
   if (findIMU()) {
     if (imuKind == IMU_MPU6050) {
