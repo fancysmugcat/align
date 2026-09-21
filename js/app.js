@@ -43,6 +43,16 @@ function boot(profile) {
 
   posture.swapSides = settings.swapSides;
   device.swapSides = settings.swapSides;
+  posture.leanThreshold = settings.sensitivity.leanThreshold;
+  device.sensitivity = settings.sensitivity;
+  settings.onSensitivityChange = (level) => {
+    posture.leanThreshold = level.leanThreshold;
+    device.sensitivity = level;
+    // The board does its own filtering, so it has to hear about this too.
+    device.sendBuzzSetting(settings.buzzInterval);
+    // The gauge reads its deadband at build time, so rebuild the cards.
+    home.refresh();
+  };
   device.buzzBoth = settings.buzzBoth;
   settings.onBuzzBothChange = (both) => {
     device.buzzBoth = both;

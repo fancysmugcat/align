@@ -107,6 +107,7 @@ const ARC_END = 360;      // right end
 
 export function createPostureArc({
   width = 300, arcHeight = 92, lineWidth = 18, maxAngle = 45, showKnob = true,
+  deadband = 3,
 } = {}) {
   const knobRadius = (lineWidth + 12) / 2;
   // The knob overshoots the top of the arc and the angle label sits above it,
@@ -223,9 +224,12 @@ export function createPostureArc({
 
     // Accelerometer noise is worth a degree or so even when nothing is moving,
     // which left the last digit flickering on a perfectly still band. Below the
-    // point where a lean is real, say zero and mean it. Widened from 1.5 after
-    // the readout was still reported as twitchy.
-    const shown = Math.abs(shownAngle) < 3 ? 0 : Math.round(shownAngle);
+    // point where a lean is real, say zero and mean it. How far that is comes
+    // from Settings -> Sensitivity.
+    // Read per draw, not captured at build time, so changing Sensitivity takes
+    // effect without rebuilding the card.
+    const band = typeof deadband === 'function' ? deadband() : deadband;
+    const shown = Math.abs(shownAngle) < band ? 0 : Math.round(shownAngle);
     label.textContent = `${shown}°`;
     label.setAttribute('fill', zoneNow.color);
     el.setAttribute('aria-label', `${shown} degrees from upright`);

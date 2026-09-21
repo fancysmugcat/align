@@ -2,7 +2,7 @@ import {
   ALIGNProtocol, DEVICE_PROFILES, DEVICE_FILTERS, ALL_SERVICES, TextCommands,
   decodeReading, parseTextReading, looksLikeText,
 } from './protocol.js';
-import { BAD_POSTURE_ANGLE, buzzTenths } from './models.js';
+import { BAD_POSTURE_ANGLE, buzzTenths, smoothingPercent, SENSITIVITY } from './models.js';
 import {
   CloudLink, normaliseCode, isValidCode, STALE_AFTER_MS,
 } from './cloud.js';
@@ -105,6 +105,8 @@ export class DeviceManager {
     this.swapSides = false;
     /** Fire both motors for a bad posture, not just the leaning side. */
     this.buzzBoth = false;
+    /** The chosen sensitivity preset; its smoothing goes to the board. */
+    this.sensitivity = null;
     /** The wearer's upright roll, pushed to the board so it can buzz on its own. */
     this.baselineRoll = null;
     /** Six-character board code, remembered between visits. */
@@ -512,20 +514,26 @@ export class DeviceManager {
     // loses its own calibration on every reboot, so sending it with each buzz
     // update keeps a reset board from sitting there unable to decide anyone is
     // leaning while the site shows a perfectly calibrated band.
+    // A baseline of exactly zero doubles as "none known", which is harmless:
+    // the board only adopts one when it has not been calibrated yet, and a
+    // true upright of 0.0 degrees is as good a baseline as any.
     const baselineKnown = typeof this.baselineRoll === 'number' && Number.isFinite(this.baselineRoll);
     const baseline = baselineKnown
       ? Math.max(-3200, Math.min(3200, Math.round(this.baselineRoll * 10)))
       : 0;
     // Byte 6 needs 4 and 5 present to reach the board, so the baseline slot is
     // always filled when a test pulse is riding along.
-    if (baselineKnown || options.testSide || typeof options.probePin === 'number') {
-      bytes.push(baseline & 0xFF, (baseline >> 8) & 0xFF);
-    }
-    if (typeof options.probePin === 'number') {
-      bytes.push(10 + options.probePin);
-    } else if (options.testSide) {
-      bytes.push({ left: 1, right: 2, both: 3 }[options.testSide] ?? 3);
-    }
+    // Always sent now: bytes 6 and 7 sit behind it, and the board ignores a
+    // baseline of zero when it has no reason to trust one.
+    bytes.push(baseline & 0xFF, (baseline >> 8) & 0xFF);
+    // Byte 6 is the test/probe slot, and byte 7 the board's filter. Byte 7
+    // can only be read if 6 is there, so 6 is always written once we are
+    // sending this far into the packet.
+    if (typeof options.probePin === 'number') bytes.push(10 + options.probePin);
+    else if (options.testSide) bytes.push({ left: 1, right: 2, both: 3 }[options.testSide] ?? 3);
+    else bytes.push(0);
+
+    bytes.push(smoothingPercent(this.sensitivity ?? SENSITIVITY.normal));
 
     await this.write(
       this.buzzChar,

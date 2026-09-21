@@ -1,11 +1,12 @@
 import { readJSON, writeJSON } from './storage.js';
-import { BUZZ_INTERVALS } from '../models.js';
+import { BUZZ_INTERVALS, SENSITIVITY } from '../models.js';
 import { scoped } from './profile.js';
 
 const BUZZ_KEY = 'align.buzzInterval';
 const FEEDBACK_KEY = 'align.feedbackURL';
 const SWAP_SIDES_KEY = 'align.swapSides';
 const BUZZ_BOTH_KEY = 'align.buzzBoth';
+const SENSITIVITY_KEY = 'align.sensitivity';
 
 /** Where the "Any Issues?" link points. Replace with your own form. */
 export const DEFAULT_FEEDBACK_URL = 'https://forms.gle/Qm7nZAyVtLU3f4Kc7';
@@ -37,12 +38,18 @@ export class SettingsStore {
     this.buzzBothKey = scoped(BUZZ_BOTH_KEY, profileId);
     this._buzzBoth = readJSON(this.buzzBothKey) === true;
 
+    this.sensitivityKey = scoped(SENSITIVITY_KEY, profileId);
+    const storedLevel = readJSON(this.sensitivityKey);
+    this._sensitivity = SENSITIVITY[storedLevel] ? storedLevel : 'normal';
+
     /** Called whenever the buzz setting changes so it can be pushed to the device. */
     this.onBuzzChange = null;
     /** Called when left/right is flipped, so the store can re-read live data. */
     this.onSwapSidesChange = null;
     /** Called when both-motor buzzing is toggled, so the board can be told. */
     this.onBuzzBothChange = null;
+    /** Called when sensitivity changes; the board's own filter follows it. */
+    this.onSensitivityChange = null;
     this.listeners = new Set();
   }
 
@@ -55,6 +62,20 @@ export class SettingsStore {
     this._buzzInterval = value;
     writeJSON(this.buzzKey, value);
     this.onBuzzChange?.(value);
+    this.listeners.forEach((listener) => listener(this));
+  }
+
+  /** The chosen preset object, never just its name. */
+  get sensitivity() {
+    return SENSITIVITY[this._sensitivity] ?? SENSITIVITY.normal;
+  }
+
+  set sensitivity(level) {
+    const id = level?.id ?? level;
+    if (!SENSITIVITY[id] || id === this._sensitivity) return;
+    this._sensitivity = id;
+    writeJSON(this.sensitivityKey, id);
+    this.onSensitivityChange?.(this.sensitivity);
     this.listeners.forEach((listener) => listener(this));
   }
 
