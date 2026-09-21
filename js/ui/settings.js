@@ -96,7 +96,14 @@ function batteryCard(device) {
     }),
     h('p', { class: 'hint' }, [
       icon(Icons.battery, 13),
-      level === null ? 'Connect ALIGN to read its battery.' : `ALIGN is at ${level}%.`,
+      // "Connect ALIGN" was shown even while ALIGN was plainly connected,
+      // because a missing level and a missing device looked the same here.
+      // They are different problems with different fixes, so they now say so.
+      level !== null
+        ? `ALIGN is at ${level}%.`
+        : device.isUsable
+          ? "This board isn't reporting a battery level. That needs a voltage divider from the cell into an ADC pin — without one there is nothing for the firmware to measure, and it says so rather than guessing."
+          : 'Connect ALIGN to read its battery.',
     ]),
   ]);
 }

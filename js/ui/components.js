@@ -421,9 +421,15 @@ function xLabels(days, intraday = false) {
   const first = days[0].day;
   const last = days[days.length - 1].day;
 
-  // Buckets within one day get a clock, not a calendar.
+  // Buckets within one day get a clock, not a calendar. Over a short window
+  // the hour alone repeats on every label — 8 AM, 8 AM, 8 AM — so once the
+  // whole span fits inside a few hours the minutes go in too.
   if (intraday) {
-    const clock = (date) => date.toLocaleTimeString(undefined, { hour: 'numeric' });
+    const spansHours = (last.getTime() - first.getTime()) / 3600000;
+    const options = spansHours <= 3
+      ? { hour: 'numeric', minute: '2-digit' }
+      : { hour: 'numeric' };
+    const clock = (date) => date.toLocaleTimeString(undefined, options);
     return [clock(first), clock(days[Math.floor(days.length / 2)].day), clock(last)];
   }
 
