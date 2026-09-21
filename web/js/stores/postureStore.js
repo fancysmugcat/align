@@ -209,11 +209,23 @@ export class PostureStore {
    * are kept so the axis stays a real clock, and `worn` simply means the band
    * was recording during that slot.
    */
-  intradaySummaries() {
-    const dayStart = startOfDay(new Date());
-    const startTime = dayStart.getTime();
-    const bucketMs = INTRADAY_BUCKET_MINUTES * 60000;
-    const bucketCount = Math.round(86400000 / bucketMs);
+  intradaySummaries(range = { bucketMinutes: INTRADAY_BUCKET_MINUTES }) {
+    const bucketMs = (range.bucketMinutes ?? INTRADAY_BUCKET_MINUTES) * 60000;
+
+    // A rolling window ends now, so its buckets are anchored to the current
+    // minute rather than to midnight — otherwise the last bucket would be a
+    // part-finished one whose average kept changing shape as it filled.
+    let startTime;
+    let bucketCount;
+    if (range.rolling) {
+      const windowMs = (range.windowMinutes ?? 60) * 60000;
+      bucketCount = Math.round(windowMs / bucketMs);
+      const end = Math.ceil(Date.now() / bucketMs) * bucketMs;
+      startTime = end - bucketCount * bucketMs;
+    } else {
+      startTime = startOfDay(new Date()).getTime();
+      bucketCount = Math.round(86400000 / bucketMs);
+    }
 
     const buckets = new Map();
     for (const sample of this.samples) {
@@ -241,7 +253,7 @@ export class PostureStore {
   }
 
   summaries(range) {
-    return range.intraday ? this.intradaySummaries() : this.dailySummaries(range.days);
+    return range.intraday ? this.intradaySummaries(range) : this.dailySummaries(range.days);
   }
 
   /**
@@ -292,10 +304,12 @@ export class PostureStore {
 
   samplesWithin(range) {
     // "Today" means since midnight, not a rolling 24 hours — otherwise the
-    // card would still be counting last night's samples this morning.
-    const cutoff = range.intraday
-      ? startOfDay(new Date()).getTime()
-      : addDays(new Date(), -range.days).getTime();
+    // card would still be counting last night's samples this morning. A
+    // rolling range is the opposite: exactly the last N minutes, ending now.
+    let cutoff;
+    if (range.rolling) cutoff = Date.now() - (range.windowMinutes ?? 60) * 60000;
+    else if (range.intraday) cutoff = startOfDay(new Date()).getTime();
+    else cutoff = addDays(new Date(), -range.days).getTime();
     return this.samples.filter((sample) => sample.date.getTime() >= cutoff);
   }
 

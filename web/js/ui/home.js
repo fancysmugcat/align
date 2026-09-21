@@ -338,17 +338,20 @@ function createProgressCard(posture, getRange, setRange) {
 
     const average = posture.averageAngle(range);
     if (average === null) {
-      const text = range.intraday
-        ? 'Nothing recorded today yet.'
-        : 'No data for this period yet.';
+      const text = range.rolling
+        ? `Nothing recorded in the last ${range.windowMinutes} minutes.`
+        : range.intraday
+          ? 'Nothing recorded today yet.'
+          : 'No data for this period yet.';
       summarySlot.replaceChildren(h('p', { class: 'empty-note', text }));
       return;
     }
 
     const good = posture.goodShare(range) ?? 0;
     // "Days worn" says nothing about a single day — show time on the band instead.
+    const wornMinutes = buckets.reduce((total, bucket) => total + bucket.wornMinutes, 0);
     const wear = range.intraday
-      ? stat(durationLabel(buckets.reduce((total, bucket) => total + bucket.wornMinutes, 0)), 'worn today')
+      ? stat(durationLabel(wornMinutes), range.rolling ? 'worn this hour' : 'worn today')
       : stat(`${buckets.filter((day) => day.worn).length}`, 'days worn');
 
     summarySlot.replaceChildren(h('div', { class: 'stat-row' }, [

@@ -67,22 +67,39 @@ export function leanFor(roll) {
 
 // MARK: - Ranges
 
+/** Bucket width for the "Today" chart. */
+export const INTRADAY_BUCKET_MINUTES = 15;
+
 export const HistoryRange = {
-  today: { id: 'today', label: 'Today', days: 1, shortLabel: '1D', intraday: true },
+  // `rolling` means the window ends now rather than at a calendar boundary —
+  // an hour ago to this minute, not since midnight.
+  hour: {
+    id: 'hour',
+    label: 'In an Hour',
+    shortLabel: '1H',
+    intraday: true,
+    rolling: true,
+    windowMinutes: 60,
+    bucketMinutes: 5,
+  },
+  today: {
+    id: 'today', label: 'Today', days: 1, shortLabel: '1D', intraday: true,
+    bucketMinutes: INTRADAY_BUCKET_MINUTES,
+  },
   week: { id: 'week', label: 'Past 1 Week', days: 7, shortLabel: '1W' },
   twoWeeks: { id: 'twoWeeks', label: 'Past 2 Weeks', days: 14, shortLabel: '2W' },
   month: { id: 'month', label: 'Past 1 Month', days: 30, shortLabel: '1M' },
 };
 
 export const ALL_RANGES = [
-  HistoryRange.today, HistoryRange.week, HistoryRange.twoWeeks, HistoryRange.month,
+  HistoryRange.hour, HistoryRange.today, HistoryRange.week,
+  HistoryRange.twoWeeks, HistoryRange.month,
 ];
 
 /**
  * How wide a bucket is on the "Today" chart. Fine enough to show posture
  * drifting across a morning, coarse enough that a full day still fits the plot.
  */
-export const INTRADAY_BUCKET_MINUTES = 15;
 
 // MARK: - Buzz
 

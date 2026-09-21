@@ -140,7 +140,12 @@ ImuKind imuKind = IMU_NONE;
 // ADC1 on the C3 is GPIO 0-4, and GPIO 4 is the motor, so 0-3 are the choices.
 // Set to -1 if no divider is fitted and the site will show battery as unknown
 // rather than a number made up out of noise.
-const int BATTERY_PIN = 3;
+// -1 means "look for it", which is what the probe below does. Set it to a
+// specific GPIO to skip the search.
+const int BATTERY_PIN = -1;
+/** Searched in this order when BATTERY_PIN is -1. ADC1 on the C3 is GPIO 0-4. */
+const int BATTERY_CANDIDATES[] = { 3, 2, 1, 0 };
+int batteryPin = -1;
 /** (R1 + R2) / R2. Two equal resistors give 2.0. */
 const float BATTERY_DIVIDER = 2.0f;
 /** A LiPo is flat well before 3.0V and full a shade under 4.2V. */
@@ -374,15 +379,54 @@ float deviation() {
   return fabs(roll - baseRoll);
 }
 
-float batteryVolts() {
-  if (BATTERY_PIN < 0) return -1.0f;
-
-  // analogReadMilliVolts applies the chip's own factory ADC calibration.
-  // Raw analogRead assumes a perfect 3.3V reference and a linear response,
-  // and on a C3 is wrong by enough to move the percentage several points.
+/**
+ * Averages a pin and reports how much the samples disagreed.
+ *
+ * analogReadMilliVolts applies the chip's own factory ADC calibration; raw
+ * analogRead assumes a perfect 3.3V reference and a linear response, and on a
+ * C3 is wrong by enough to move the percentage several points.
+ */
+float readPinVolts(int pin, float *spreadOut) {
   uint32_t total = 0;
-  for (int i = 0; i < 8; i++) total += analogReadMilliVolts(BATTERY_PIN);
-  return (total / 8.0f) / 1000.0f * BATTERY_DIVIDER;
+  uint32_t lo = UINT32_MAX, hi = 0;
+  for (int i = 0; i < 12; i++) {
+    uint32_t mv = analogReadMilliVolts(pin);
+    total += mv;
+    if (mv < lo) lo = mv;
+    if (mv > hi) hi = mv;
+  }
+  if (spreadOut) *spreadOut = (hi - lo) / 1000.0f * BATTERY_DIVIDER;
+  return (total / 12.0f) / 1000.0f * BATTERY_DIVIDER;
+}
+
+/**
+ * Finds the divider rather than trusting a constant, the same way the IMU pins
+ * are found. A pin with a cell behind it sits at a steady, plausible voltage;
+ * an unconnected one floats and wanders. Requiring both rules out reading a
+ * floating input as a battery — which would put an invented percentage on the
+ * wearer's screen, worse than showing nothing.
+ */
+void findBatteryPin() {
+  if (BATTERY_PIN >= 0) { batteryPin = BATTERY_PIN; return; }
+
+  for (int pin : BATTERY_CANDIDATES) {
+    if (pin == MOTOR_PIN || pin == sdaPin || pin == sclPin) continue;
+    float spread = 0;
+    float volts = readPinVolts(pin, &spread);
+    Serial.printf("  battery probe GPIO %d: %.2f V (spread %.2f V)\n", pin, volts, spread);
+    if (volts >= 3.0f && volts <= 4.35f && spread < 0.12f) {
+      batteryPin = pin;
+      Serial.printf("Battery divider found on GPIO %d.\n", pin);
+      return;
+    }
+  }
+  Serial.println("No battery divider found — the site will show battery as unknown.");
+  Serial.println("  Wire: cell + -> 100k -> an ADC pin (GPIO 0-3) -> 100k -> GND.");
+}
+
+float batteryVolts() {
+  if (batteryPin < 0) return -1.0f;
+  return readPinVolts(batteryPin, nullptr);
 }
 
 int batteryPercent() {
@@ -942,6 +986,9 @@ void setup() {
     Serial.println("No IMU found on any candidate pin pair — streaming a demo sweep.");
     Serial.println("  Check 3V3, GND, SDA and SCL, then add the pair to I2C_CANDIDATES.");
   }
+
+  Serial.println("Looking for a battery divider...");
+  findBatteryPin();
 
   makeBoardCode();
   Serial.println();
