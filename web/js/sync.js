@@ -30,10 +30,13 @@ export class SheetSync {
     this.profile = profile;
     this.device = device;
 
-    // Settings used to offer a field for this. Anything it left behind could be
-    // any URL at all — including the spreadsheet's own, which can't accept
-    // posts — so the stored value is dropped and config.js is the only source.
-    removeKey(ENDPOINT_KEY);
+    // The endpoint is entered in Settings and kept in this browser, not
+    // committed to config.js — the repository is public, and anyone holding
+    // the URL can post rows into the sheet. A stored value is only honoured
+    // if it actually looks like an Apps Script deployment, because the field
+    // previously collected spreadsheet URLs, which cannot accept posts.
+    const stored = readJSON(ENDPOINT_KEY);
+    if (stored && !isAppsScriptEndpoint(stored)) removeKey(ENDPOINT_KEY);
 
     if (this.endpoint && !isAppsScriptEndpoint(this.endpoint)) {
       console.warn(
@@ -62,8 +65,38 @@ export class SheetSync {
   // MARK: - Configuration
 
   /** Set once, in config.js — there is nothing to configure in the app. */
+  /** Where the wearer's own endpoint is kept, if they have entered one. */
+  static get storedEndpoint() {
+    const stored = readJSON(ENDPOINT_KEY);
+    return isAppsScriptEndpoint(stored) ? stored : '';
+  }
+
+  /**
+   * @returns {{ok: boolean, message: string}} whether it was accepted.
+   */
+  static setEndpoint(url) {
+    const trimmed = String(url ?? '').trim();
+    if (!trimmed) {
+      removeKey(ENDPOINT_KEY);
+      return { ok: true, message: 'Sheet disconnected.' };
+    }
+    if (!isAppsScriptEndpoint(trimmed)) {
+      return {
+        ok: false,
+        message: 'That needs to be the Apps Script deployment URL — it starts '
+          + 'https://script.google.com/macros/s/ and ends /exec. The '
+          + "spreadsheet's own address can't receive data.",
+      };
+    }
+    return writeJSON(ENDPOINT_KEY, trimmed)
+      ? { ok: true, message: 'Sheet connected.' }
+      : { ok: false, message: "This browser won't store the address." };
+  }
+
   get endpoint() {
-    return (SHEET_WEB_APP_URL ?? '').trim();
+    // What the wearer entered wins; config.js is only a fallback for a build
+    // that ships its own endpoint.
+    return SheetSync.storedEndpoint || (SHEET_WEB_APP_URL ?? '').trim();
   }
 
   get sheetURL() {
