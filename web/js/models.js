@@ -80,23 +80,31 @@ export function leanFor(roll, threshold = LEAN_THRESHOLD) {
  * rounds of "too slow" and "too sensitive", so they are a setting instead.
  *
  * `smoothing` is the board's filter coefficient: higher is calmer and slower.
+ * `graceMs` is how long a lean must be held before the motor fires — it was a
+ * flat three seconds, which on top of the filter meant four and a half
+ * seconds between leaning and feeling anything.
  */
 export const SENSITIVITY = {
   calm: {
     id: 'calm', label: 'Calm',
-    smoothing: 0.82, deadband: 4, leanThreshold: 8,
+    smoothing: 0.82, deadband: 4, leanThreshold: 8, graceMs: 2000,
   },
   normal: {
     id: 'normal', label: 'Normal',
-    smoothing: 0.70, deadband: 3, leanThreshold: 6,
+    smoothing: 0.70, deadband: 3, leanThreshold: 6, graceMs: 1000,
   },
   quick: {
     id: 'quick', label: 'Quick',
-    smoothing: 0.55, deadband: 2, leanThreshold: 4,
+    smoothing: 0.55, deadband: 2, leanThreshold: 4, graceMs: 500,
   },
 };
 
 export const ALL_SENSITIVITIES = [SENSITIVITY.calm, SENSITIVITY.normal, SENSITIVITY.quick];
+
+/** Grace period in tenths of a second, which is how it crosses BLE. */
+export function graceTenths(level) {
+  return Math.max(0, Math.min(255, Math.round((level?.graceMs ?? 1000) / 100)));
+}
 
 /** Board filter coefficient as a whole percent, which is how it crosses BLE. */
 export function smoothingPercent(level) {

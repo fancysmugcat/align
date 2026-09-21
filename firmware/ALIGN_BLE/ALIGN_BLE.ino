@@ -105,7 +105,10 @@ const float BATTERY_FULL_V = 4.15f;
 float tiltThreshold = 20.5;
 const unsigned long SAMPLE_INTERVAL = 100;  // ms between reads / notifies (10 Hz)
 
-const unsigned long BAD_POSTURE_GRACE_MS = 3000;
+// Set from the site with the sensitivity preset. Three flat seconds, on top
+// of the accelerometer filter, meant about four and a half between leaning
+// and feeling anything.
+unsigned long badPostureGraceMs = 1000;
 const unsigned long BUZZ_COOLDOWN_MS     = 10000;
 // Hard ceiling on one buzz, whatever the website asks for.
 const unsigned long MAX_BUZZ_MS          = 5000;
@@ -510,8 +513,8 @@ void updateBuzz(unsigned long now) {
     badSinceMs = now;
     return;
   }
-  if (now - badSinceMs < BAD_POSTURE_GRACE_MS) {
-    if (explain) Serial.printf("  [buzz] waiting out the %lums grace period.\n", BAD_POSTURE_GRACE_MS);
+  if (now - badSinceMs < badPostureGraceMs) {
+    if (explain) Serial.printf("  [buzz] waiting out the %lums grace period.\n", badPostureGraceMs);
     return;
   }
   if (now - lastBuzzMs < BUZZ_COOLDOWN_MS) {
@@ -655,6 +658,12 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
     if (value.length() >= 8 && value[7] > 0 && value[7] < 95) {
       smoothing = value[7] / 100.0f;
       Serial.printf("Smoothing set to %.2f.\n", smoothing);
+    }
+
+    // Byte 8: grace period in tenths of a second.
+    if (value.length() >= 9) {
+      badPostureGraceMs = (unsigned long)value[8] * 100UL;
+      Serial.printf("Grace period set to %lums.\n", badPostureGraceMs);
     }
 
     Serial.printf("Buzz set to %.1fs past %.1f degrees.\n",

@@ -2,7 +2,7 @@ import {
   ALIGNProtocol, DEVICE_PROFILES, DEVICE_FILTERS, ALL_SERVICES, TextCommands,
   decodeReading, parseTextReading, looksLikeText,
 } from './protocol.js';
-import { BAD_POSTURE_ANGLE, buzzTenths, smoothingPercent, SENSITIVITY } from './models.js';
+import { BAD_POSTURE_ANGLE, buzzTenths, smoothingPercent, graceTenths, SENSITIVITY } from './models.js';
 import {
   CloudLink, normaliseCode, isValidCode, STALE_AFTER_MS,
 } from './cloud.js';
@@ -533,7 +533,10 @@ export class DeviceManager {
     else if (options.testSide) bytes.push({ left: 1, right: 2, both: 3 }[options.testSide] ?? 3);
     else bytes.push(0);
 
-    bytes.push(smoothingPercent(this.sensitivity ?? SENSITIVITY.normal));
+    const level = this.sensitivity ?? SENSITIVITY.normal;
+    bytes.push(smoothingPercent(level));
+    // Byte 8: how long a lean must be held before the motor fires.
+    bytes.push(graceTenths(level));
 
     await this.write(
       this.buzzChar,
