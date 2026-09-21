@@ -17,7 +17,7 @@ export const ALIGNProtocol = {
   /** Notify. 8-byte posture packet, see `decodeReading`. */
   postureCharacteristic: 'a11c0002-7e9c-4d2b-9b3a-2f5c9d1e0002',
 
-  /** Write. 1 byte: buzz duration in seconds (0 = off, 1, 2, 5). */
+  /** Write. Byte 0: buzz duration in tenths of a second (0 = off, 5, 10, 20). */
   buzzCharacteristic: 'a11c0003-7e9c-4d2b-9b3a-2f5c9d1e0003',
 
   /** Write. 1 byte command, see `Command`. */
@@ -101,7 +101,7 @@ export const DEVICE_FILTERS = [
 
 /** Text a serial-style board is sent when a setting changes. */
 export const TextCommands = {
-  buzz: (seconds, degrees) => `buzz:${seconds},${degrees}\n`,
+  buzz: (seconds, degrees) => `buzz:${seconds},${degrees}\n`,   // seconds, for serial sketches
   calibrate: () => 'calibrate\n',
   testBuzz: () => 'buzz-test\n',
 };
