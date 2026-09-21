@@ -802,3 +802,7 @@ body.signed-out .topbar-actions { display: none; }
   font-weight: 700;
   text-align: center;
 }
+
+/* Row of GPIO numbers for hunting down which pin a motor is on. */
+.pin-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pin-row .pill-button { padding: 8px 14px; min-width: 44px; }

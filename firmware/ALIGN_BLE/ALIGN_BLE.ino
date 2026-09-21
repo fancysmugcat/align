@@ -179,6 +179,18 @@ bool buzzBoth = false;
  */
 uint8_t buzzWrites = 0;
 
+// A pin being pulsed to find out whether a motor is on it. Kept apart from the
+// buzz machinery so probing can't disturb a real correction.
+int probePin = -1;
+unsigned long probeUntilMs = 0;
+
+/** Pins that must never be driven: the IMU, the USB lines, and the straps. */
+bool pinIsUnsafe(int pin) {
+  return pin == sdaPin || pin == sclPin
+      || pin == 18 || pin == 19      // USB D- and D+; driving them kills serial
+      || pin == 8 || pin == 9;       // boot strapping
+}
+
 // How many clients have actually subscribed to posture notifications. A
 // connection alone isn't enough — the browser has to write the CCCD too.
 uint16_t subscriberCount = 0;
@@ -463,6 +475,10 @@ BuzzSide leaningSide() {
 
 // Non-blocking: a delay() here would stall the BLE stack for the whole buzz.
 void updateBuzz(unsigned long now) {
+  if (probePin >= 0 && now >= probeUntilMs) {
+    digitalWrite(probePin, LOW);
+    probePin = -1;
+  }
   if (buzzUntilMs != 0 && now >= buzzUntilMs) {
     motorsOff();
     buzzUntilMs = 0;
@@ -591,7 +607,20 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
     // because the command channel proved unreliable in the field while this
     // one was demonstrably delivering the baseline. A test button that cannot
     // be trusted to arrive is worse than no test button.
-    if (value.length() >= 7 && value[6] != 0) {
+    if (value.length() >= 7 && value[6] >= 10) {
+      // 10 and up means "pulse this GPIO", so a motor can be hunted for from
+      // the site rather than by reflashing a finder sketch each time.
+      int pin = value[6] - 10;
+      if (pinIsUnsafe(pin)) {
+        Serial.printf("Refusing to pulse GPIO %d — it is in use.\n", pin);
+      } else {
+        Serial.printf("Probe pulse: GPIO %d for 600ms.\n", pin);
+        pinMode(pin, OUTPUT);
+        digitalWrite(pin, HIGH);
+        probePin = pin;
+        probeUntilMs = millis() + 600;
+      }
+    } else if (value.length() >= 7 && value[6] != 0) {
       switch (value[6]) {
         case 1:
           Serial.printf("Test pulse: LEFT, GPIO %d.\n", MOTOR_LEFT_PIN);

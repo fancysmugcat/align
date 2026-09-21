@@ -213,6 +213,22 @@ function deviceCard({ device, posture, settings, actions, close }) {
       ? h('p', { class: 'hint hint--warn', text: `Last write failed: ${device.lastWriteError}` })
       : null,
 
+    // GPIO 4 has stayed silent on every path while GPIO 0 answers whenever
+    // anything reaches it. Either that motor is dead or it is on another pin,
+    // and only the band can say which — so the pins are pulsed from here
+    // rather than by reflashing a finder sketch for each guess.
+    h('p', { class: 'row-label', text: 'Find a motor' }),
+    h('div', { class: 'pin-row' }, [1, 2, 3, 5, 10, 20, 21].map((pin) => h('button', {
+      type: 'button', class: 'pill-button pill-button--ghost', text: `${pin}`,
+      disabled: !connected,
+      title: `Pulse GPIO ${pin} for half a second`,
+      onClick: () => device.probeMotorPin(pin),
+    }))),
+    h('p', {
+      class: 'hint',
+      text: 'Hold the motor that never buzzes and tap each number. If one of them makes it move, that is the pin it is wired to — tell me which and I will set it. If none do, the motor or its wiring is the fault.',
+    }),
+
     h('hr', { class: 'divider' }),
     row('Bad posture buzzes', settings.buzzBoth ? 'Both motors' : 'The leaning side', true),
     h('button', {
