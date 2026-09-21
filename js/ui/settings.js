@@ -146,7 +146,7 @@ function sensitivityCard(settings) {
     }),
     h('p', {
       class: 'hint',
-      text: `Below ${level.leanThreshold}° counts as centred, and the angle reads zero under ${level.deadband}°. This also sets how hard the board filters its own accelerometer.`,
+      text: `Below ${level.leanThreshold}° counts as centred, the angle reads zero under ${level.deadband}°, and a lean must be held ${level.graceMs / 1000}s before the motor buzzes. This also sets how hard the board filters its own accelerometer.`,
     }),
   ]);
 }
