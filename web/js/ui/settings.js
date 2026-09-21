@@ -100,8 +100,10 @@ function batteryCard(device) {
       // because a missing level and a missing device looked the same here.
       // They are different problems with different fixes, so they now say so.
       level !== null
-        ? `ALIGN is at ${level}%.`
-        : device.isUsable
+        ? `ALIGN is at ${level}%.${device.batteryPinMillivolts ? ` Sense pin reads ${(device.batteryPinMillivolts / 1000).toFixed(2)} V.` : ''}`
+        : device.batteryPinMillivolts
+          ? `The sense pin reads ${(device.batteryPinMillivolts / 1000).toFixed(2)} V, which doesn't match a single cell through the expected 2:1 divider. Tell me this number and the resistor values and I'll set the ratio.`
+          : device.isUsable
           ? "This board isn't reporting a battery level. That needs a voltage divider from the cell into an ADC pin — without one there is nothing for the firmware to measure, and it says so rather than guessing."
           : 'Connect ALIGN to read its battery.',
     ]),

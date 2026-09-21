@@ -74,6 +74,8 @@ export class DeviceManager {
     this.canShowAllDevices = false;
     /** Battery percentage reported by the device, 0...100. */
     this.battery = null;
+    /** Raw millivolts at the sense pin, for checking the divider ratio. */
+    this.batteryPinMillivolts = null;
     this.latest = null;
     this.errorMessage = null;
 
@@ -390,6 +392,7 @@ export class DeviceManager {
     this.latest = reading;
     this.lastPacketAt = reading.timestamp;
     if (reading.battery !== null) this.battery = reading.battery;
+    if (reading.pinMillivolts) this.batteryPinMillivolts = reading.pinMillivolts;
     this.onReading?.(reading);
   }
 

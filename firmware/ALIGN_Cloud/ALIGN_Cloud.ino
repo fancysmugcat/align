@@ -310,13 +310,13 @@ bool mpuReadTilt(float &pitchDeg, float &rollDeg) {
   // back rotates about X and lands on ay. The two were the other way round,
   // so the angle that drives everything was tracking slouch rather than lean.
   //
-  // Only the axes are chosen here. Whether a positive reading means left or
-  // right is Settings -> Device -> "Swap left and right", because it depends on
-  // which way the sensor ended up facing and no value compiled in here can be
-  // right for every build of the band.
+  // Negated so that positive means leaning right, which is what the site
+  // assumes everywhere. This depends purely on which way the sensor faces, so
+  // Settings -> Device -> "Swap left and right" flips it without a reflash if
+  // the band is ever rebuilt the other way round.
   lastAxg = axg;
   lastAyg = ayg;
-  rollDeg  = atan2f(axg, azg) * 180.0f / PI;
+  rollDeg  = -atan2f(axg, azg) * 180.0f / PI;
   pitchDeg = atan2f(-ayg, sqrtf(axg * axg + azg * azg)) * 180.0f / PI;
   return true;
 }

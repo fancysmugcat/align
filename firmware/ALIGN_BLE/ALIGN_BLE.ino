@@ -253,13 +253,13 @@ bool mpuReadTilt(float &pitchDeg, float &rollDeg) {
   // back rotates about X and lands on ay. The two were the other way round,
   // so the angle that drives everything was tracking slouch rather than lean.
   //
-  // Only the axes are chosen here. Whether a positive reading means left or
-  // right is Settings -> Device -> "Swap left and right", because it depends on
-  // which way the sensor ended up facing and no value compiled in here can be
-  // right for every build of the band.
+  // Negated so that positive means leaning right, which is what the site
+  // assumes everywhere. This depends purely on which way the sensor faces, so
+  // Settings -> Device -> "Swap left and right" flips it without a reflash if
+  // the band is ever rebuilt the other way round.
   lastAxg = axg;
   lastAyg = ayg;
-  rollDeg  = atan2f(axg, azg) * 180.0f / PI;
+  rollDeg  = -atan2f(axg, azg) * 180.0f / PI;
   pitchDeg = atan2f(-ayg, sqrtf(axg * axg + azg * azg)) * 180.0f / PI;
   return true;
 }
@@ -370,6 +370,12 @@ void findBatteryPin() {
 float batteryVolts() {
   if (batteryPin < 0) return -1.0f;
   return readPinVolts(batteryPin, nullptr);
+}
+
+/** What the ADC pin itself sees, in millivolts, divider ratio not applied. */
+float rawPinMillivolts() {
+  if (batteryPin < 0) return 0.0f;
+  return readPinVolts(batteryPin, nullptr) / BATTERY_DIVIDER * 1000.0f;
 }
 
 int batteryPercent() {
@@ -532,7 +538,14 @@ void notifyPosture() {
   int16_t r = (int16_t)roundf(roll * 100.0f);
   int battery = batteryPercent();
 
-  uint8_t packet[8];
+  // Bytes 8-9 carry the raw voltage at the sense pin, before the divider ratio
+  // is applied. A percentage alone can't be argued with — if the ratio is wrong
+  // the number is confidently wrong and nothing on screen says so — whereas the
+  // millivolts can be checked against a meter. The site ignores trailing bytes
+  // it doesn't know, so older builds keep working.
+  uint16_t pinMv = (batteryPin >= 0) ? (uint16_t)lroundf(rawPinMillivolts()) : 0;
+
+  uint8_t packet[10];
   packet[0] = p & 0xFF;
   packet[1] = (p >> 8) & 0xFF;
   packet[2] = r & 0xFF;
@@ -542,6 +555,8 @@ void notifyPosture() {
   packet[5] = (millis() < buzzUntilMs) ? 0x01 : 0x00;
   packet[6] = sequence & 0xFF;
   packet[7] = (sequence >> 8) & 0xFF;
+  packet[8] = pinMv & 0xFF;
+  packet[9] = (pinMv >> 8) & 0xFF;
   sequence++;
 
   if (postureChar->notify(packet, sizeof(packet))) notifiesSent++;

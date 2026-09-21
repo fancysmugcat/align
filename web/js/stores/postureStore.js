@@ -17,8 +17,9 @@ import { scoped } from './profile.js';
  *
  * 2: roll moved from the X axis to the Y axis, so it measures sideways lean
  *    rather than forward slouch.
+ * 3: roll negated, so positive means leaning right.
  */
-const SENSOR_VERSION = 2;
+const SENSOR_VERSION = 3;
 
 export class PostureStore {
   // MARK: Tuning
