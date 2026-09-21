@@ -1,5 +1,6 @@
 import { BUZZ_INTERVALS, buzzLabel, buzzDetail } from '../models.js';
 import { DeviceManager, isIOS, IOS_BLUETOOTH_BROWSER } from '../device.js';
+import { ALIGNProtocol } from '../protocol.js';
 import { SheetSync } from '../sync.js';
 import { initials } from '../stores/profile.js';
 import { Theme } from '../theme.js';
@@ -173,6 +174,28 @@ function deviceCard({ device, posture, settings, actions, close }) {
       }),
       connectButton,
     ]),
+
+    h('hr', { class: 'divider' }),
+    // Buzzing one side on demand separates "the motors don't work" from "the
+    // bad-posture trigger never fired", which otherwise both present as
+    // silence and take a three-second lean to tell apart.
+    h('p', { class: 'row-label', text: 'Test the motors' }),
+    h('div', { class: 'button-pair' }, [
+      h('button', {
+        type: 'button', class: 'pill-button pill-button--ghost', text: 'Buzz left',
+        disabled: !connected,
+        onClick: () => device.send(ALIGNProtocol.Command.testLeft),
+      }),
+      h('button', {
+        type: 'button', class: 'pill-button pill-button--ghost', text: 'Buzz right',
+        disabled: !connected,
+        onClick: () => device.send(ALIGNProtocol.Command.testRight),
+      }),
+    ]),
+    h('p', {
+      class: 'hint',
+      text: 'Each buzzes that side for half a second. If nothing happens the motors or their wiring are the problem; if the wrong side buzzes, say so and the pins get swapped.',
+    }),
 
     h('hr', { class: 'divider' }),
     row('Sides', settings.swapSides ? 'Swapped' : 'Normal', !settings.swapSides),

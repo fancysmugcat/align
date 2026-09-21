@@ -480,18 +480,25 @@ export class DeviceManager {
   }
 
   async send(command) {
+    const { Command } = ALIGNProtocol;
     if (this.transport === 'cloud') {
-      this.cloud?.publishCommand(command === ALIGNProtocol.Command.calibrate
-        ? { calibrate: true }
-        : { buzzTest: true });
+      const payload = command === Command.calibrate ? { calibrate: true }
+        : command === Command.testLeft ? { buzzTest: true, side: 'left' }
+        : command === Command.testRight ? { buzzTest: true, side: 'right' }
+        : { buzzTest: true };
+      this.cloud?.publishCommand(payload);
       return;
     }
     if (this.transport === 'wifi') {
-      await this.httpCommand(command === ALIGNProtocol.Command.calibrate ? '/calibrate' : '/buzz-test');
+      const path = command === Command.calibrate ? '/calibrate'
+        : command === Command.testLeft ? '/buzz-test?side=left'
+        : command === Command.testRight ? '/buzz-test?side=right'
+        : '/buzz-test';
+      await this.httpCommand(path);
       return;
     }
     if (!this.commandChar) return;
-    const text = command === ALIGNProtocol.Command.calibrate
+    const text = command === Command.calibrate
       ? TextCommands.calibrate()
       : TextCommands.testBuzz();
     await this.write(this.commandChar, Uint8Array.of(command), text);
