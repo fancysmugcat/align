@@ -43,6 +43,10 @@ static const char *DEVICE_NAME = "ALIGN";
 // Command bytes, from protocol.js `Command`.
 static const uint8_t CMD_CALIBRATE = 0x01;
 static const uint8_t CMD_TEST_BUZZ = 0x02;
+// One side at a time, so the wiring and the left/right mapping can be checked
+// without having to hold a lean past the threshold for three seconds first.
+static const uint8_t CMD_TEST_LEFT = 0x03;
+static const uint8_t CMD_TEST_RIGHT = 0x04;
 
 // ---------------------------------------------------------------- pins
 
@@ -453,10 +457,23 @@ void updateBuzz(unsigned long now) {
     motorsOff();
     buzzUntilMs = 0;
   }
-  if (buzzSeconds == 0) return;
-  if (!calibrated) return;
+  // Every reason the motors could stay silent, reported once each rather than
+  // leaving "nothing happened" to be guessed at.
+  static unsigned long lastWhyMs = 0;
+  const bool explain = (now - lastWhyMs >= 5000);
+  if (explain) lastWhyMs = now;
+
+  if (buzzSeconds == 0) {
+    if (explain) Serial.println("  [buzz] off — buzz duration is set to OFF on the site.");
+    return;
+  }
+  if (!calibrated) {
+    if (explain) Serial.println("  [buzz] idle — not calibrated yet, so there is no upright to be off from.");
+    return;
+  }
 
   if (deviation() < tiltThreshold) {
+    if (explain) Serial.printf("  [buzz] idle — leaning %.1f deg, needs %.1f.\n", deviation(), tiltThreshold);
     badSinceMs = 0;
     return;
   }
@@ -464,8 +481,14 @@ void updateBuzz(unsigned long now) {
     badSinceMs = now;
     return;
   }
-  if (now - badSinceMs < BAD_POSTURE_GRACE_MS) return;
-  if (now - lastBuzzMs < BUZZ_COOLDOWN_MS) return;
+  if (now - badSinceMs < BAD_POSTURE_GRACE_MS) {
+    if (explain) Serial.printf("  [buzz] waiting out the %lums grace period.\n", BAD_POSTURE_GRACE_MS);
+    return;
+  }
+  if (now - lastBuzzMs < BUZZ_COOLDOWN_MS) {
+    if (explain) Serial.println("  [buzz] in cooldown since the last buzz.");
+    return;
+  }
 
   BuzzSide side = leaningSide();
   Serial.printf("Bad posture (%.1f deg) — buzzing %s.\n",
@@ -554,6 +577,14 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
         Serial.println("Calibrated: this is upright.");
         // A short buzz is how the wearer knows it took.
         startBuzz(millis(), 300, BUZZ_BOTH);
+        break;
+      case CMD_TEST_LEFT:
+        Serial.printf("Test buzz: LEFT motor, GPIO %d.\n", MOTOR_LEFT_PIN);
+        startBuzz(millis(), 600, BUZZ_LEFT);
+        break;
+      case CMD_TEST_RIGHT:
+        Serial.printf("Test buzz: RIGHT motor, GPIO %d.\n", MOTOR_RIGHT_PIN);
+        startBuzz(millis(), 600, BUZZ_RIGHT);
         break;
       case CMD_TEST_BUZZ:
         Serial.println("Test buzz.");

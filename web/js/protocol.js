@@ -35,6 +35,9 @@ export const ALIGNProtocol = {
     calibrate: 0x01,
     /** One short buzz, used to confirm calibration in the UI. */
     testBuzz: 0x02,
+    /** One side at a time, for checking the wiring and the left/right mapping. */
+    testLeft: 0x03,
+    testRight: 0x04,
   },
 };
 
