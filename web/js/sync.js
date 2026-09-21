@@ -1,4 +1,6 @@
-import { SHEET_WEB_APP_URL, SHEET_URL, SYNC_INTERVAL_MINUTES, SYNC_WINDOW_DAYS } from './config.js';
+import {
+  SHEET_WEB_APP_URL, SHEET_TOKEN, SHEET_URL, SYNC_INTERVAL_MINUTES, SYNC_WINDOW_DAYS,
+} from './config.js';
 import { readJSON, writeJSON, removeKey } from './stores/storage.js';
 import { qualityLabel } from './models.js';
 
@@ -177,6 +179,7 @@ export class SheetSync {
 
     return {
       version: 2,
+      token: SHEET_TOKEN,
       sentAt: new Date().toISOString(),
       readings,
       profile: {
