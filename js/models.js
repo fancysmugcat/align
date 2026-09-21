@@ -56,8 +56,14 @@ export function zoneFor(angle) {
 
 export const LeanSide = { left: 'left', right: 'right', center: 'center' };
 
-/** Below this many degrees of roll we consider the user centered. */
-export const LEAN_THRESHOLD = 4;
+/**
+ * Below this many degrees of roll we consider the user centered.
+ *
+ * Four degrees is inside the range an ordinary person sways through while
+ * sitting still, so the live row flickered between left, centred and right
+ * without anyone moving deliberately. Six is a lean you meant.
+ */
+export const LEAN_THRESHOLD = 6;
 
 export function leanFor(roll) {
   if (roll <= -LEAN_THRESHOLD) return LeanSide.left;

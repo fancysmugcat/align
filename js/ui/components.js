@@ -192,7 +192,7 @@ export function createPostureArc({
 
   // Fraction of the remaining distance closed per frame. 0.22 trailed the
   // wearer; 0.4 chased every twitch of accelerometer noise. This sits between.
-  const EASING = 0.3;
+  const EASING = 0.25;
   /** Below this the move isn't visible, so stop rather than loop forever. */
   const SETTLED = 0.05;
 
@@ -223,8 +223,9 @@ export function createPostureArc({
 
     // Accelerometer noise is worth a degree or so even when nothing is moving,
     // which left the last digit flickering on a perfectly still band. Below the
-    // point where a lean is real, say zero and mean it.
-    const shown = Math.abs(shownAngle) < 1.5 ? 0 : Math.round(shownAngle);
+    // point where a lean is real, say zero and mean it. Widened from 1.5 after
+    // the readout was still reported as twitchy.
+    const shown = Math.abs(shownAngle) < 3 ? 0 : Math.round(shownAngle);
     label.textContent = `${shown}°`;
     label.setAttribute('fill', zoneNow.color);
     el.setAttribute('aria-label', `${shown} degrees from upright`);
