@@ -84,8 +84,13 @@ function batteryCard(device) {
 
   const knobColor = level === null ? Theme.track : (level <= 20 ? Theme.zoneBad : Theme.greenSoft);
 
-  return card({ title: 'Battery' }, [
-    segmentedPill({
+  // With no reading the pill still drew its whole 0-100 scale with nothing
+  // highlighted, and the leftmost label sat there reading "0%" — which is how
+  // an unwired board came to look like a flat one. A scale is only honest when
+  // there is a value on it, so with nothing to show it isn't drawn at all.
+  const meter = level === null
+    ? h('p', { class: 'battery-unknown', text: 'No reading' })
+    : segmentedPill({
       options: BATTERY_STEPS,
       label: (step) => `${step}%`,
       selection: nearest,
@@ -93,7 +98,10 @@ function batteryCard(device) {
       trackColor: '#FFFFFF',
       knobColor,
       ariaLabel: 'Battery level',
-    }),
+    });
+
+  return card({ title: 'Battery' }, [
+    meter,
     h('p', { class: 'hint' }, [
       icon(Icons.battery, 13),
       // "Connect ALIGN" was shown even while ALIGN was plainly connected,

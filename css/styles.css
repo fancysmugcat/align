@@ -789,3 +789,16 @@ body.signed-out .topbar-actions { display: none; }
 }
 .battery-chip--low { background: #F8DAD8; color: var(--zone-bad); }
 .battery-chip .inline-icon { margin-right: 0; }
+
+/* Stands in for the battery meter when the board reports no level. A scale
+   with nothing on it reads as zero, which is worse than saying nothing. */
+.battery-unknown {
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
