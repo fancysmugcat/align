@@ -33,7 +33,7 @@ export function renderSignIn(mount, { onSignedIn }) {
       }
       const profile = createProfile({ name: trimmed, email: email.value });
       await adoptLegacyData(profile.id);
-      signIn(profile.id);
+      warnIfNotSaved(signIn(profile.id));
       onSignedIn(profile);
     },
   }, [
@@ -67,7 +67,7 @@ export function renderSignIn(mount, { onSignedIn }) {
         type: 'button',
         class: 'profile-row',
         onClick: () => {
-          signIn(profile.id);
+          warnIfNotSaved(signIn(profile.id));
           onSignedIn(profile);
         },
       }, [
@@ -91,4 +91,17 @@ function lastSeen(profile) {
   if (days === 1) return 'Last worn yesterday';
   if (days < 30) return `Last worn ${days} days ago`;
   return `Last worn ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+}
+
+/**
+ * Says so when a sign-in will not survive a reload, rather than letting the
+ * wearer discover it by being signed out again next time.
+ */
+function warnIfNotSaved(saved) {
+  if (saved) return;
+  alert(
+    "This browser isn't letting ALIGN remember you, so you'll be asked again "
+    + 'next time. Private browsing and "clear site data on close" both do this. '
+    + 'Everything still works while the page stays open.',
+  );
 }

@@ -45,6 +45,19 @@ export const PostureZone = {
  */
 export const BAD_POSTURE_ANGLE = 20.5;
 
+/**
+ * The traffic-light word for an angle, as the spreadsheet wants it.
+ *
+ * Four zones collapse to three colours: "poor" and "bad" are both red, since
+ * from a spreadsheet's point of view they are the same verdict at different
+ * severities.
+ */
+export function qualityLabel(angle) {
+  const zone = zoneFor(angle);
+  if (zone.isGood) return 'green';
+  return zone.id === 'fair' ? 'yellow' : 'red';
+}
+
 export function zoneFor(angle) {
   if (angle < 10.5) return PostureZone.good;
   if (angle < BAD_POSTURE_ANGLE) return PostureZone.fair;
