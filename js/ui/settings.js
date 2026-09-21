@@ -194,7 +194,32 @@ function deviceCard({ device, posture, settings, actions, close }) {
     ]),
     h('p', {
       class: 'hint',
-      text: 'Each buzzes that side for half a second. If nothing happens the motors or their wiring are the problem; if the wrong side buzzes, say so and the pins get swapped.',
+      text: 'Each buzzes that side for half a second. "Buzz left" drives GPIO 4, "Buzz right" drives GPIO 0.',
+    }),
+    // What the board says about itself while you press them. A silent motor
+    // with "board says: buzzing" is a wiring fault; a silent motor with
+    // nothing here means the command never arrived.
+    h('p', { class: 'hint' }, [
+      device.boardBuzzing ? 'Board says: a motor is running now. ' : 'Board says: no motor running. ',
+      device.channels
+        ? `Channels — readings ${device.channels.notify ? 'yes' : 'NO'}, buzz ${device.channels.buzz ? 'yes' : 'NO'}, commands ${device.channels.command ? 'yes' : 'NO'}.`
+        : '',
+    ]),
+    device.lastWriteError
+      ? h('p', { class: 'hint hint--warn', text: `Last write failed: ${device.lastWriteError}` })
+      : null,
+
+    h('hr', { class: 'divider' }),
+    row('Bad posture buzzes', settings.buzzBoth ? 'Both motors' : 'The leaning side', true),
+    h('button', {
+      type: 'button',
+      class: 'pill-button pill-button--ghost',
+      text: settings.buzzBoth ? 'Buzz only the leaning side' : 'Buzz both motors',
+      onClick: () => { settings.buzzBoth = !settings.buzzBoth; },
+    }),
+    h('p', {
+      class: 'hint',
+      text: 'Buzzing only the side you lean toward tells you which way to correct. Buzzing both loses that, but still warns you when one motor is dead or unwired.',
     }),
 
     h('hr', { class: 'divider' }),

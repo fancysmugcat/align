@@ -43,6 +43,11 @@ function boot(profile) {
 
   posture.swapSides = settings.swapSides;
   device.swapSides = settings.swapSides;
+  device.buzzBoth = settings.buzzBoth;
+  settings.onBuzzBothChange = (both) => {
+    device.buzzBoth = both;
+    device.sendBuzzSetting(settings.buzzInterval);
+  };
 
   /**
    * Keeps the board's idea of upright in step with the site's.

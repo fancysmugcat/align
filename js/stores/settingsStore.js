@@ -4,6 +4,7 @@ import { scoped } from './profile.js';
 const BUZZ_KEY = 'align.buzzInterval';
 const FEEDBACK_KEY = 'align.feedbackURL';
 const SWAP_SIDES_KEY = 'align.swapSides';
+const BUZZ_BOTH_KEY = 'align.buzzBoth';
 
 /** Where the "Any Issues?" link points. Replace with your own form. */
 export const DEFAULT_FEEDBACK_URL = 'https://forms.gle/Qm7nZAyVtLU3f4Kc7';
@@ -26,10 +27,18 @@ export class SettingsStore {
     // can throw in one tap.
     this._swapSides = readJSON(this.swapKey) === true;
 
+    // With one motor dead or unwired, half the corrections go unfelt. Firing
+    // both loses the direction but not the warning, which is the better half
+    // to keep.
+    this.buzzBothKey = scoped(BUZZ_BOTH_KEY, profileId);
+    this._buzzBoth = readJSON(this.buzzBothKey) === true;
+
     /** Called whenever the buzz setting changes so it can be pushed to the device. */
     this.onBuzzChange = null;
     /** Called when left/right is flipped, so the store can re-read live data. */
     this.onSwapSidesChange = null;
+    /** Called when both-motor buzzing is toggled, so the board can be told. */
+    this.onBuzzBothChange = null;
     this.listeners = new Set();
   }
 
@@ -42,6 +51,19 @@ export class SettingsStore {
     this._buzzInterval = value;
     writeJSON(this.buzzKey, value);
     this.onBuzzChange?.(value);
+    this.listeners.forEach((listener) => listener(this));
+  }
+
+  get buzzBoth() {
+    return this._buzzBoth;
+  }
+
+  set buzzBoth(value) {
+    const next = value === true;
+    if (next === this._buzzBoth) return;
+    this._buzzBoth = next;
+    writeJSON(this.buzzBothKey, next);
+    this.onBuzzBothChange?.(next);
     this.listeners.forEach((listener) => listener(this));
   }
 
