@@ -190,11 +190,9 @@ export function createPostureArc({
   let zoneNow = PostureZone.good;
   let frame = null;
 
-  // Fraction of the remaining distance closed per frame. The board already
-  // applies a heavy exponential filter of its own before a reading ever leaves
-  // it, so a slow easing here stacks on top of that and the gauge trails the
-  // wearer visibly. Fast enough to feel immediate, slow enough not to jitter.
-  const EASING = 0.4;
+  // Fraction of the remaining distance closed per frame. 0.22 trailed the
+  // wearer; 0.4 chased every twitch of accelerometer noise. This sits between.
+  const EASING = 0.3;
   /** Below this the move isn't visible, so stop rather than loop forever. */
   const SETTLED = 0.05;
 
@@ -223,9 +221,13 @@ export function createPostureArc({
     knob.setAttribute('cy', point.y.toFixed(2));
     knob.setAttribute('stroke', zoneNow.color);
 
-    label.textContent = `${Math.round(shownAngle)}°`;
+    // Accelerometer noise is worth a degree or so even when nothing is moving,
+    // which left the last digit flickering on a perfectly still band. Below the
+    // point where a lean is real, say zero and mean it.
+    const shown = Math.abs(shownAngle) < 1.5 ? 0 : Math.round(shownAngle);
+    label.textContent = `${shown}°`;
     label.setAttribute('fill', zoneNow.color);
-    el.setAttribute('aria-label', `${Math.round(shownAngle)} degrees from upright`);
+    el.setAttribute('aria-label', `${shown} degrees from upright`);
   }
 
   function tick() {

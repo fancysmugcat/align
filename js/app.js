@@ -3,7 +3,7 @@ import { SettingsStore } from './stores/settingsStore.js';
 import { activeProfile, signOut, initials } from './stores/profile.js';
 import { DeviceManager } from './device.js';
 import { SheetSync } from './sync.js';
-import { h } from './ui/components.js';
+import { h, icon, Icons } from './ui/components.js';
 import { createHome } from './ui/home.js';
 import { openSettings } from './ui/settings.js';
 import { openCalibration } from './ui/calibration.js';
@@ -64,6 +64,7 @@ function boot(profile) {
   const home = createHome({ posture, device, settings, actions });
   document.getElementById('cards').append(home.el);
 
+  mountBatteryChip(device);
   mountProfileChip(profile, openSettingsSheet);
   settingsButton.addEventListener('click', openSettingsSheet);
 
@@ -148,6 +149,31 @@ function boot(profile) {
   posture.load().then(() => {
     device.start();
     sync.start();
+  });
+}
+
+/**
+ * The board's battery, in the top bar.
+ *
+ * It was only ever in Settings, two taps away, which is no use for the one
+ * question it answers — whether the band will last the afternoon. Hidden
+ * entirely when the board reports nothing, since no divider is fitted on every
+ * build and an empty outline reads as "flat" rather than "unknown".
+ */
+function mountBatteryChip(device) {
+  const text = h('span', { class: 'battery-chip-level' });
+  const chip = h('span', { class: 'battery-chip' }, [icon(Icons.battery, 15), text]);
+  chip.hidden = true;
+  topbarActions.prepend(chip);
+
+  device.subscribe(() => {
+    const level = device.battery;
+    const known = typeof level === 'number' && level >= 0 && level <= 100;
+    chip.hidden = !known;
+    if (!known) return;
+    text.textContent = `${level}%`;
+    chip.classList.toggle('battery-chip--low', level <= 20);
+    chip.setAttribute('title', `ALIGN battery: ${level}%`);
   });
 }
 

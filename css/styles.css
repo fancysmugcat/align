@@ -772,3 +772,20 @@ body.signed-out .topbar-actions { display: none; }
   font-variant-numeric: tabular-nums;
   min-height: 1.2em;
 }
+
+/* Board battery, in the top bar. Sits quietly next to the profile chip and
+   disappears when the board reports no level at all. */
+.battery-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--green-pale);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.battery-chip--low { background: #F8DAD8; color: var(--zone-bad); }
+.battery-chip .inline-icon { margin-right: 0; }
