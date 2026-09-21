@@ -129,8 +129,23 @@ int sdaPin = 6, sclPin = 7;
 uint8_t imuAddress = 0x68;
 ImuKind imuKind = IMU_NONE;
 
-// An ADC pin on a battery divider, or -1 to report "unknown".
-const int BATTERY_PIN = -1;
+// ---------------------------------------------------------------- battery
+//
+// The cell's positive terminal through a 2:1 divider — two equal resistors,
+// 100k each is plenty — into an ADC pin, with the junction going to the pin.
+// The divider is not optional: a full LiPo sits at 4.2V and the C3's ADC tops
+// out around 2.5V, so wiring the cell straight to a pin reads nothing useful
+// and stresses the input.
+//
+// ADC1 on the C3 is GPIO 0-4, and GPIO 4 is the motor, so 0-3 are the choices.
+// Set to -1 if no divider is fitted and the site will show battery as unknown
+// rather than a number made up out of noise.
+const int BATTERY_PIN = 3;
+/** (R1 + R2) / R2. Two equal resistors give 2.0. */
+const float BATTERY_DIVIDER = 2.0f;
+/** A LiPo is flat well before 3.0V and full a shade under 4.2V. */
+const float BATTERY_EMPTY_V = 3.30f;
+const float BATTERY_FULL_V = 4.15f;
 
 // ---------------------------------------------------------------- settings
 
@@ -143,11 +158,11 @@ const unsigned long BAD_POSTURE_GRACE_MS = 3000;
 const unsigned long BUZZ_COOLDOWN_MS     = 10000;
 const unsigned long MAX_BUZZ_MS          = 5000;
 
-// At the 100ms sample rate 0.75 works out to a third of a second to reach two
-// thirds of a movement and close to a second to arrive — the gauge visibly
-// trailed the wearer, and the website's own easing sits on top of it. 0.45 is
-// a seventh of a second, still filtering accelerometer noise without the drag.
-const float SMOOTHING = 0.45;               // 0 = raw, 0.9 = heavily smoothed
+// At the 100ms sample rate this is the trade between drag and jitter: 0.75 took
+// about a second to arrive and visibly trailed the wearer, 0.45 passed enough
+// accelerometer noise through that the reading twitched while the band sat
+// still. 0.62 settles in roughly half a second.
+const float SMOOTHING = 0.62;               // 0 = raw, 0.9 = heavily smoothed
 
 // ---------------------------------------------------------------- state
 
@@ -359,12 +374,26 @@ float deviation() {
   return fabs(roll - baseRoll);
 }
 
-int batteryPercent() {
-  if (BATTERY_PIN < 0) return -1;           // unknown
+float batteryVolts() {
+  if (BATTERY_PIN < 0) return -1.0f;
 
-  int raw = analogRead(BATTERY_PIN);
-  float volts = (raw / 4095.0) * 3.3 * 2.0;
-  int pct = (int)((volts - 3.0) / (4.2 - 3.0) * 100.0);
+  // analogReadMilliVolts applies the chip's own factory ADC calibration.
+  // Raw analogRead assumes a perfect 3.3V reference and a linear response,
+  // and on a C3 is wrong by enough to move the percentage several points.
+  uint32_t total = 0;
+  for (int i = 0; i < 8; i++) total += analogReadMilliVolts(BATTERY_PIN);
+  return (total / 8.0f) / 1000.0f * BATTERY_DIVIDER;
+}
+
+int batteryPercent() {
+  float volts = batteryVolts();
+  if (volts < 0) return -1;
+
+  // An unconnected pin floats somewhere meaningless. Report "unknown" rather
+  // than turning noise into a confident percentage on the wearer's screen.
+  if (volts < 2.5f || volts > 5.0f) return -1;
+
+  int pct = lroundf((volts - BATTERY_EMPTY_V) / (BATTERY_FULL_V - BATTERY_EMPTY_V) * 100.0f);
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   return pct;
@@ -995,7 +1024,10 @@ void loop() {
       Serial.print(SETUP_AP_SSID);
       Serial.println("\" and open http://192.168.4.1");
     } else {
-      Serial.print("  ax=");
+      Serial.print("  batt=");
+    if (batteryPercent() < 0) Serial.print("n/a");
+    else { Serial.print(batteryPercent()); Serial.print("%/"); Serial.print(batteryVolts(), 2); Serial.print("V"); }
+    Serial.print("  ax=");
     Serial.print(lastAxg, 2);
     Serial.print(" ay=");
     Serial.print(lastAyg, 2);

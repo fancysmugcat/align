@@ -9,6 +9,17 @@ import { scoped } from './profile.js';
  * Owns calibration, the rolling sample history, and every derived statistic the
  * home screen shows (current angle, streak, progress chart, lean bias).
  */
+/**
+ * Bumped whenever the firmware changes what pitch and roll mean — a different
+ * axis, or a flipped sign. Baselines recorded under an older convention are
+ * discarded on load, because subtracting one from a new reading produces a
+ * confident, completely wrong answer.
+ *
+ * 2: roll moved from the X axis to the Y axis, so it measures sideways lean
+ *    rather than forward slouch.
+ */
+const SENSOR_VERSION = 2;
+
 export class PostureStore {
   // MARK: Tuning
 
@@ -126,6 +137,7 @@ export class PostureStore {
       pitch: this.calibration.pitch,
       roll: this.calibration.roll,
       date: this.calibration.date.toISOString(),
+      sensorVersion: SENSOR_VERSION,
     });
     this.emitData();
     this.emitLive();
@@ -142,6 +154,12 @@ export class PostureStore {
   loadCalibration() {
     const stored = readJSON(this.calibrationKey);
     if (!stored || typeof stored.pitch !== 'number' || typeof stored.roll !== 'number') return null;
+    // A baseline is only meaningful against the sensor convention it was taken
+    // under. When the firmware's axes changed, every stored baseline silently
+    // became a constant offset instead — the wearer sat upright and the site
+    // insisted they were leaning. Old ones are dropped so the calibration
+    // banner comes back rather than the numbers quietly lying.
+    if (stored.sensorVersion !== SENSOR_VERSION) return null;
     return { pitch: stored.pitch, roll: stored.roll, date: new Date(stored.date) };
   }
 
