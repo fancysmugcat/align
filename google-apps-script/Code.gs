@@ -13,8 +13,13 @@
  *       Who has access:  Anyone
  *  4. Copy the /exec URL and put it in web/js/config.js as SHEET_WEB_APP_URL.
  *
- * Step 3's "Anyone" is what lets a phone post without a Google login. The URL
- * is the only secret; anyone holding it can add rows, so don't publish it.
+ * Step 3's "Anyone" is what lets a phone post without a Google login.
+ *
+ * The URL is in the site's own JavaScript, which every visitor is served, so
+ * treat it as public — a private repository would not change that. Someone who
+ * reads it can add rows; nobody can read anything back, because this only ever
+ * replies with a status. If it is abused, delete the deployment and make a new
+ * one: a minute's work and a fresh URL.
  *
  * Re-deploy (Manage deployments → edit → New version) after any change here,
  * or the old code keeps serving.
@@ -37,10 +42,26 @@ var QUALITY_COLOURS = {
   red: '#F4CCCC',
 };
 
+/**
+ * Must match SHEET_TOKEN in web/js/config.js.
+ *
+ * Not a secret — it ships in the site's own JavaScript, so anyone reading the
+ * URL reads this too. It turns away the traffic that posts to any endpoint it
+ * finds, which is most of what an exposed URL attracts, and nothing more. The
+ * real remedy for abuse is a new deployment.
+ */
+var TOKEN = 'align-band';
+
+/** A sane ceiling, so one request cannot be used to fill the sheet. */
+var MAX_ROWS_PER_REQUEST = 3000;
+
 function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
+    if (payload.token !== TOKEN) return json({ ok: false, error: 'bad token' });
+
     var name = (payload.profile && payload.profile.name) || 'Unknown';
+    if (String(name).length > 60) return json({ ok: false, error: 'bad name' });
 
     var written = writeReadings(name, payload.readings || []);
     written += writeDaily(name, payload.days || []);
@@ -66,6 +87,9 @@ function doGet() {
  */
 function writeReadings(name, readings) {
   if (!readings.length) return 0;
+  if (readings.length > MAX_ROWS_PER_REQUEST) {
+    readings = readings.slice(0, MAX_ROWS_PER_REQUEST);
+  }
 
   var sheet = sheetWithHeader(READINGS_SHEET, READINGS_HEADER);
   var keyColumn = READINGS_HEADER.length + 1;   // just past the visible columns
@@ -88,9 +112,12 @@ function writeReadings(name, readings) {
     if (seen[key]) continue;
     seen[key] = true;
 
-    rows.push([name, reading.date, reading.time, reading.angle, reading.quality]);
+    // Only the three known verdicts are written, so the Quality column cannot
+    // be turned into free text by a malformed post.
+    var quality = QUALITY_COLOURS[reading.quality] ? reading.quality : '';
+    rows.push([name, reading.date, reading.time, Number(reading.angle) || 0, quality]);
     keyRows.push([key]);
-    colours.push([QUALITY_COLOURS[reading.quality] || '#FFFFFF']);
+    colours.push([QUALITY_COLOURS[quality] || '#FFFFFF']);
   }
   if (!rows.length) return 0;
 
