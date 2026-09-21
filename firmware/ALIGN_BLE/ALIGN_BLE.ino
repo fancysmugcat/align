@@ -161,7 +161,7 @@ bool imuPresent = false;
 
 float pitch = 0, roll = 0;              // degrees, smoothed
 float basePitch = 0, baseRoll = 0;      // upright reference
-uint8_t buzzSeconds = 2;
+uint8_t buzzTenths = 10;   // tenths of a second; 0 = off
 uint16_t sequence = 0;
 
 // Nothing vibrates until the website says what upright means. Without this a
@@ -492,7 +492,7 @@ void updateBuzz(unsigned long now) {
   const bool explain = (now - lastWhyMs >= 5000);
   if (explain) lastWhyMs = now;
 
-  if (buzzSeconds == 0) {
+  if (buzzTenths == 0) {
     if (explain) Serial.println("  [buzz] off — buzz duration is set to OFF on the site.");
     return;
   }
@@ -523,7 +523,7 @@ void updateBuzz(unsigned long now) {
   Serial.printf("Bad posture (%.1f deg) — buzzing %s.\n", deviation(),
                 side == BUZZ_BOTH ? "both" : side == BUZZ_RIGHT ? "right" : "left");
   lastBuzzMs = now;
-  startBuzz(now, (unsigned long)buzzSeconds * 1000UL, side);
+  startBuzz(now, (unsigned long)buzzTenths * 100UL, side);
 }
 
 // ---------------------------------------------------------------- BLE
@@ -569,10 +569,11 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
     for (size_t i = 0; i < value.length(); i++) Serial.printf(" %02X", value[i]);
     Serial.println();
 
-    int seconds = value[0];
-    if (seconds < 0) seconds = 0;
-    if (seconds > 60) seconds = 60;
-    buzzSeconds = (uint8_t)seconds;
+    // Byte 0 is tenths of a second, not seconds. A whole-second byte could not
+    // express the half-second setting the site now offers, and tenths fit the
+    // same byte while still reaching far past the firmware's own cap.
+    buzzTenths = value[0];
+    Serial.printf("Buzz duration set to %.1fs.\n", buzzTenths / 10.0f);
 
     // Bytes 1-2, when present, carry the site's bad-posture angle in tenths of
     // a degree. Without them this is an older one-byte write, so the current
@@ -650,11 +651,8 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
       }
     }
 
-    Serial.print("Buzz set to ");
-    Serial.print(buzzSeconds);
-    Serial.print("s past ");
-    Serial.print(tiltThreshold, 1);
-    Serial.println(" degrees");
+    Serial.printf("Buzz set to %.1fs past %.1f degrees.\n",
+                  buzzTenths / 10.0f, tiltThreshold);
   }
 };
 

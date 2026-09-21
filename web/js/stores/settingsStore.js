@@ -1,4 +1,5 @@
 import { readJSON, writeJSON } from './storage.js';
+import { BUZZ_INTERVALS } from '../models.js';
 import { scoped } from './profile.js';
 
 const BUZZ_KEY = 'align.buzzInterval';
@@ -16,8 +17,11 @@ export class SettingsStore {
 
     this.swapKey = scoped(SWAP_SIDES_KEY, profileId);
 
+    // 5s is gone and 0.5s is new, so an old preference is carried across
+    // rather than silently reset: the longest setting stays the longest.
     const storedBuzz = readJSON(this.buzzKey);
-    this._buzzInterval = [0, 1, 2, 5].includes(storedBuzz) ? storedBuzz : 2;
+    const migrated = storedBuzz === 5 ? 2 : storedBuzz;
+    this._buzzInterval = BUZZ_INTERVALS.includes(migrated) ? migrated : 1;
     this.feedbackURL = readJSON(FEEDBACK_KEY) ?? DEFAULT_FEEDBACK_URL;
 
     // Which way round left and right are depends on which way the sensor ended

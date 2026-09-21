@@ -110,7 +110,7 @@ export const ALL_RANGES = [
 // MARK: - Buzz
 
 /** Haptic feedback the ALIGN device gives when posture goes bad. */
-export const BUZZ_INTERVALS = [0, 1, 2, 5];
+export const BUZZ_INTERVALS = [0, 0.5, 1, 2];
 
 export function buzzLabel(seconds) {
   return seconds === 0 ? 'OFF' : `${seconds}s`;
@@ -118,7 +118,19 @@ export function buzzLabel(seconds) {
 
 export function buzzDetail(seconds) {
   if (seconds === 0) return 'ALIGN will not buzz when your posture slips.';
-  return `ALIGN buzzes for ${seconds} second${seconds === 1 ? '' : 's'} when you slouch past your upright angle.`;
+  if (seconds < 1) return `ALIGN buzzes for ${seconds} of a second when you lean past your upright angle.`;
+  return `ALIGN buzzes for ${seconds} second${seconds === 1 ? '' : 's'} when you lean past your upright angle.`;
+}
+
+/**
+ * Buzz duration crosses to the board in tenths of a second, not seconds.
+ *
+ * A whole-second byte had no way to say "half a second" — the shortest buzz
+ * the protocol could express was a full second. Tenths cost the same single
+ * byte and reach 25 seconds, which is far longer than the firmware's own cap.
+ */
+export function buzzTenths(seconds) {
+  return Math.max(0, Math.min(255, Math.round(seconds * 10)));
 }
 
 // MARK: - Dates

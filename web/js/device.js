@@ -2,7 +2,7 @@ import {
   ALIGNProtocol, DEVICE_PROFILES, DEVICE_FILTERS, ALL_SERVICES, TextCommands,
   decodeReading, parseTextReading, looksLikeText,
 } from './protocol.js';
-import { BAD_POSTURE_ANGLE } from './models.js';
+import { BAD_POSTURE_ANGLE, buzzTenths } from './models.js';
 import {
   CloudLink, normaliseCode, isValidCode, STALE_AFTER_MS,
 } from './cloud.js';
@@ -504,7 +504,9 @@ export class DeviceManager {
     this.lastBuzzSeconds = seconds;
     this.writesSent += 1;
     const flags = (this.swapSides ? 0x01 : 0) | (this.buzzBoth ? 0x02 : 0);
-    const bytes = [seconds, tenths & 0xFF, (tenths >> 8) & 0xFF, flags];
+    // Byte 0 is tenths of a second. It used to be whole seconds, which could
+    // not express the half-second setting at all.
+    const bytes = [buzzTenths(seconds), tenths & 0xFF, (tenths >> 8) & 0xFF, flags];
 
     // Bytes 4-5: the wearer's upright roll, in tenths of a degree. The board
     // loses its own calibration on every reboot, so sending it with each buzz
