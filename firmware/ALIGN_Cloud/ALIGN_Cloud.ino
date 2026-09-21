@@ -163,11 +163,11 @@ const unsigned long BAD_POSTURE_GRACE_MS = 3000;
 const unsigned long BUZZ_COOLDOWN_MS     = 10000;
 const unsigned long MAX_BUZZ_MS          = 5000;
 
-// At the 100ms sample rate this is the trade between drag and jitter: 0.75 took
-// about a second to arrive and visibly trailed the wearer, 0.45 passed enough
-// accelerometer noise through that the reading twitched while the band sat
-// still. 0.62 settles in roughly half a second.
-const float SMOOTHING = 0.62;               // 0 = raw, 0.9 = heavily smoothed
+// Raising this trades responsiveness for calm. The history here: 0.75 dragged
+// visibly, 0.45 passed enough accelerometer noise that the reading twitched on
+// a still band, 0.62 was still reported as too sensitive. 0.70 settles in
+// about eight tenths of a second.
+const float SMOOTHING = 0.70;               // 0 = raw, 0.9 = heavily smoothed
 
 // ---------------------------------------------------------------- state
 
