@@ -30,8 +30,7 @@
  * wearer's daily figures go up on their own, with nothing to configure in the
  * app.
  */
-export const SHEET_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbx4-ZuTWJjbVK5oACD0DyvvCoKuYOfOPPuDMIdkjOyBBPE3W3z4MtqQWHUxZolDc1yt/exec';
+export const SHEET_WEB_APP_URL = '';
 
 /**
  * A word the Apps Script checks before writing anything.

@@ -1,7 +1,7 @@
 import { BUZZ_INTERVALS, buzzLabel, buzzDetail, ALL_SENSITIVITIES } from '../models.js';
 import { DeviceManager, isIOS, IOS_BLUETOOTH_BROWSER } from '../device.js';
 import { ALIGNProtocol } from '../protocol.js';
-import { SheetSync } from '../sync.js';
+import { openRecords } from './records.js';
 import { initials } from '../stores/profile.js';
 import { Theme } from '../theme.js';
 import { h, card, icon, Icons, segmentedPill } from './components.js';
@@ -37,7 +37,7 @@ export function openSettings({ device, posture, settings, sync, profile, actions
       buzzCard(settings),
       deviceCard({ device, posture, settings, actions, close: sheet.close }),
       issuesSection(settings),
-      dataSection(posture, sync),
+      dataSection(posture),
     );
   }
 
@@ -350,58 +350,28 @@ function issuesSection(settings) {
 
 // MARK: - Data
 
-function dataSection(posture, sync) {
-  const field = h('input', {
-    type: 'text', class: 'field',
-    value: SheetSync.storedEndpoint,
-    placeholder: 'https://script.google.com/macros/s/…/exec',
-    'aria-label': 'Apps Script deployment URL',
-    spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off',
-  });
-  const note = h('p', { class: 'hint' });
-
+function dataSection(posture) {
   return h('section', { class: 'section' }, [
     h('h3', { class: 'section-title', text: 'Data' }),
-    // Entered here rather than committed to config.js: the repository is
-    // public, and whoever holds this URL can post rows into the sheet.
-    h('p', { class: 'section-detail', text: 'Google Sheet' }),
-    h('div', { class: 'endpoint-row' }, [
-      field,
-      h('button', {
-        type: 'button', class: 'pill-button', text: 'Save',
-        onClick: () => {
-          const result = SheetSync.setEndpoint(field.value);
-          note.textContent = result.message;
-          note.classList.toggle('hint--warn', !result.ok);
-          if (result.ok) sync.syncNow({ silent: false });
-        },
-      }),
-    ]),
-    note,
     h('p', {
-      class: 'hint',
-      text: 'The deployment URL from Extensions → Apps Script → Deploy → Web app. Kept on this device only, so it is not published with the site — enter it again on each device you use.',
+      class: 'section-detail',
+      text: 'Every reading this device has recorded, for every wearer.',
+    }),
+    h('button', {
+      type: 'button', class: 'pill-button', text: 'Open records',
+      onClick: () => openRecords(),
     }),
     h('button', {
       type: 'button', class: 'link-button', text: 'Load demo data',
       onClick: () => posture.loadSampleData(),
     }),
     h('button', {
-      type: 'button', class: 'link-button link-button--danger', text: 'Erase history and calibration',
+      type: 'button', class: 'link-button link-button--danger', text: 'Erase all data',
       onClick: () => {
-        const message = 'Erase all ALIGN data?\n\nThis deletes your posture history and your upright baseline.';
-        if (globalThis.confirm(message)) posture.resetAll();
+        if (confirm('Erase this profile\u2019s calibration and history? This cannot be undone.')) {
+          posture.resetAll();
+        }
       },
-    }),
-    h('p', {
-      class: 'hint',
-      text: 'History is stored in this browser only — clearing site data removes it.',
-    }),
-
-    // Syncing runs on its own; this is the only place it reports back.
-    h('p', {
-      class: `hint${sync.status === SheetSync.Status.error ? ' hint--warn' : ''}`,
-      text: `Google Sheet: ${sync.statusLabel.toLowerCase()}.`,
     }),
   ]);
 }
