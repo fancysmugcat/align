@@ -806,3 +806,42 @@ body.signed-out .topbar-actions { display: none; }
 /* Row of GPIO numbers for hunting down which pin a motor is on. */
 .pin-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .pin-row .pill-button { padding: 8px 14px; min-width: 44px; }
+
+/* ---------------------------------------------------------------- records */
+
+.records-table {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  /* Long histories run to thousands of rows; scroll inside rather than
+     turning the whole sheet into an endless page. */
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.records-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1.1fr 0.9fr 0.7fr 0.9fr;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--hairline);
+}
+.records-row:last-child { border-bottom: 0; }
+.records-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.records-row--head {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  font-weight: 700;
+  color: var(--green);
+}
+
+.records-quality { font-weight: 700; text-transform: capitalize; }
+.records-quality--green { color: var(--zone-good); }
+.records-quality--yellow { color: var(--zone-poor); }
+.records-quality--red { color: var(--zone-bad); }
