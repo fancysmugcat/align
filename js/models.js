@@ -96,21 +96,41 @@ export function leanFor(roll, threshold = LEAN_THRESHOLD) {
  * `graceMs` is how long a lean must be held before the motor fires — it was a
  * flat three seconds, which on top of the filter meant four and a half
  * seconds between leaning and feeling anything.
+ *
+ * `intensity` is how hard the motor runs, as a percentage of full power.
+ *
+ * It was not here at all until now, and the omission made two of the three
+ * settings lie. Calm and Normal changed when the buzz arrived and never what
+ * it felt like — the firmware drove the motor pins with a plain digital HIGH,
+ * so every preset produced the same full-power jolt. A setting called "Calm"
+ * that buzzes exactly as hard as "Quick" is worse than no setting: the wearer
+ * picks it, feels no difference, and stops trusting the control. The board
+ * runs the motors on PWM now, and these are the duty cycles.
+ *
+ * The floor is not zero. A coin motor stalls below roughly half power, so
+ * Calm sits at 55 rather than somewhere that would feel gentler on paper and
+ * do nothing on a wrist — and the firmware kicks every buzz at full power for
+ * a few dozen milliseconds to break static friction before settling to this.
  */
 export const SENSITIVITY = {
   calm: {
     id: 'calm', label: 'Calm',
-    smoothing: 0.82, deadband: 4, leanThreshold: 8, graceMs: 2000,
+    smoothing: 0.82, deadband: 4, leanThreshold: 8, graceMs: 2000, intensity: 55,
   },
   normal: {
     id: 'normal', label: 'Normal',
-    smoothing: 0.70, deadband: 3, leanThreshold: 6, graceMs: 1000,
+    smoothing: 0.70, deadband: 3, leanThreshold: 6, graceMs: 1000, intensity: 78,
   },
   quick: {
     id: 'quick', label: 'Quick',
-    smoothing: 0.55, deadband: 2, leanThreshold: 4, graceMs: 500,
+    smoothing: 0.55, deadband: 2, leanThreshold: 4, graceMs: 500, intensity: 100,
   },
 };
+
+/** How the motor strength crosses BLE: a whole percent, never zero. */
+export function intensityPercent(level) {
+  return Math.max(1, Math.min(100, Math.round(level?.intensity ?? 78)));
+}
 
 export const ALL_SENSITIVITIES = [SENSITIVITY.calm, SENSITIVITY.normal, SENSITIVITY.quick];
 

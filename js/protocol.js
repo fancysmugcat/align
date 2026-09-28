@@ -17,7 +17,19 @@ export const ALIGNProtocol = {
   /** Notify. 8-byte posture packet, see `decodeReading`. */
   postureCharacteristic: 'a11c0002-7e9c-4d2b-9b3a-2f5c9d1e0002',
 
-  /** Write. Byte 0: buzz duration in tenths of a second (0 = off, 5, 10, 20). */
+  /**
+   * Write. The settings packet. Older firmware reads as far as it understands
+   * and ignores the rest, so a short write stays valid.
+   *
+   *     [0]    uint8  buzz duration, tenths of a second (0 = off)
+   *     [1..2] uint16 bad-posture angle, tenths of a degree
+   *     [3]    uint8  flags (bit 0: swap sides, bit 1: buzz both motors)
+   *     [4..5] int16  the wearer's upright roll, tenths of a degree
+   *     [6]    uint8  0 none, 1/2/3 test left/right/both, 10+n pulse GPIO n
+   *     [7]    uint8  accelerometer filter, whole percent
+   *     [8]    uint8  grace period before buzzing, tenths of a second
+   *     [9]    uint8  motor strength, percent of full power
+   */
   buzzCharacteristic: 'a11c0003-7e9c-4d2b-9b3a-2f5c9d1e0003',
 
   /** Write. 1 byte command, see `Command`. */

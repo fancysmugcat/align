@@ -2,7 +2,9 @@ import {
   ALIGNProtocol, DEVICE_PROFILES, DEVICE_FILTERS, ALL_SERVICES, TextCommands,
   decodeReading, parseTextReading, looksLikeText,
 } from './protocol.js';
-import { BAD_POSTURE_ANGLE, buzzTenths, smoothingPercent, graceTenths, SENSITIVITY } from './models.js';
+import {
+  BAD_POSTURE_ANGLE, buzzTenths, smoothingPercent, graceTenths, intensityPercent, SENSITIVITY,
+} from './models.js';
 import {
   CloudLink, normaliseCode, isValidCode, STALE_AFTER_MS,
 } from './cloud.js';
@@ -162,6 +164,19 @@ export class DeviceManager {
 
   get isDemo() {
     return this.state === DeviceManager.State.demo;
+  }
+
+  /**
+   * Whether a write would actually reach a board.
+   *
+   * The diagnostics live behind demo mode, and demo mode does not hang up an
+   * existing connection — so "am I connected" is the wrong question there.
+   * What the pin probes need to know is narrower: is there still a channel to
+   * write down. A BLE session leaves `buzzChar` in place until it drops, and
+   * the cloud and wifi transports carry commands of their own.
+   */
+  get canReachBoard() {
+    return Boolean(this.buzzChar) || this.transport === 'cloud' || this.transport === 'wifi';
   }
 
   /** What the site is talking to, once it knows. */
@@ -485,12 +500,17 @@ export class DeviceManager {
    *   delivering the baseline.
    */
   async sendBuzzSetting(seconds, options = {}) {
+    const level = this.sensitivity ?? SENSITIVITY.normal;
     if (this.transport === 'cloud') {
-      this.cloud?.publishCommand({ buzz: seconds, threshold: BAD_POSTURE_ANGLE });
+      this.cloud?.publishCommand({
+        buzz: seconds, threshold: BAD_POSTURE_ANGLE, intensity: intensityPercent(level),
+      });
       return;
     }
     if (this.transport === 'wifi') {
-      await this.httpCommand(`/buzz?seconds=${seconds}&threshold=${BAD_POSTURE_ANGLE}`);
+      await this.httpCommand(
+        `/buzz?seconds=${seconds}&threshold=${BAD_POSTURE_ANGLE}&intensity=${intensityPercent(level)}`,
+      );
       return;
     }
     if (!this.buzzChar) {
@@ -533,10 +553,13 @@ export class DeviceManager {
     else if (options.testSide) bytes.push({ left: 1, right: 2, both: 3 }[options.testSide] ?? 3);
     else bytes.push(0);
 
-    const level = this.sensitivity ?? SENSITIVITY.normal;
     bytes.push(smoothingPercent(level));
     // Byte 8: how long a lean must be held before the motor fires.
     bytes.push(graceTenths(level));
+    // Byte 9: how hard to run the motor, as a percent of full power. Without
+    // it the board drove every buzz at full tilt, so "Calm" and "Normal"
+    // changed when the buzz came and never what it felt like.
+    bytes.push(intensityPercent(level));
 
     await this.write(
       this.buzzChar,
