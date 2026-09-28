@@ -160,11 +160,77 @@ int batteryPercent() {
 
 // ---------------------------------------------------------------- buzzing
 
+/**
+ * The motor runs on PWM so the site's Sensitivity presets can differ in how
+ * the buzz *feels*, not only in how readily it fires. Driven with a plain
+ * digital HIGH, "Calm" and "Normal" were the same full-power jolt.
+ *
+ * 20 kHz is above hearing; a coin motor whines audibly at part duty lower
+ * down. The opening kick at full power exists because a stopped motor needs
+ * more to start than to keep turning — without it a gentle setting is
+ * indistinguishable from a dead motor.
+ */
+const int MOTOR_PWM_FREQ = 20000;
+const int MOTOR_PWM_BITS = 8;
+const int MOTOR_PWM_CH   = 0;
+const unsigned long MOTOR_KICK_MS = 60;
+
+/** Percent of full power, pushed from the site with the buzz settings. */
+uint8_t motorIntensity = 78;
+bool motorWanted = false;
+unsigned long motorKickUntilMs = 0;
+
+uint8_t motorDuty() {
+  uint16_t duty = ((uint16_t)motorIntensity * 255 + 50) / 100;
+  if (duty > 255) duty = 255;
+  return (uint8_t)duty;
+}
+
+/** The ESP32 core renamed LEDC in 3.x; both spellings are kept so this builds
+ *  on whichever core is installed. */
+void motorPwmBegin() {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcAttach(MOTOR_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_BITS);
+#else
+  ledcSetup(MOTOR_PWM_CH, MOTOR_PWM_FREQ, MOTOR_PWM_BITS);
+  ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CH);
+#endif
+}
+
+void motorPwmWrite(uint8_t duty) {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(MOTOR_PIN, duty);
+#else
+  ledcWrite(MOTOR_PWM_CH, duty);
+#endif
+}
+
+void motorOn() {
+  motorWanted = true;
+  motorKickUntilMs = millis() + MOTOR_KICK_MS;
+  motorPwmWrite(255);
+}
+
+void motorOff() {
+  motorWanted = false;
+  motorKickUntilMs = 0;
+  motorPwmWrite(0);
+}
+
+/** Drops from the opening kick to the strength that was actually asked for. */
+void updateMotor(unsigned long now) {
+  if (motorKickUntilMs != 0 && now >= motorKickUntilMs) {
+    motorKickUntilMs = 0;
+    if (motorWanted) motorPwmWrite(motorDuty());
+  }
+}
+
 // Non-blocking. The prototype's delay(VIBRATION_TIME) froze everything for the
 // whole buzz, which would stall the web server too.
 void updateBuzz(unsigned long now) {
+  updateMotor(now);
   if (buzzUntilMs != 0 && now >= buzzUntilMs) {
-    digitalWrite(MOTOR_PIN, LOW);
+    motorOff();
     buzzUntilMs = 0;
   }
   if (buzzSeconds == 0) return;
@@ -186,7 +252,7 @@ void updateBuzz(unsigned long now) {
   unsigned long duration = (unsigned long)buzzSeconds * 1000UL;
   if (duration > MAX_BUZZ_MS) duration = MAX_BUZZ_MS;
   buzzUntilMs = now + duration;
-  digitalWrite(MOTOR_PIN, HIGH);
+  motorOn();
 }
 
 // ---------------------------------------------------------------- http
@@ -237,12 +303,18 @@ void handleBuzz() {
     Serial.print(buzzSeconds);
     Serial.println("s");
   }
+  // How hard to run the motor, as a percent of full power. Older site builds
+  // never send it, so the compiled-in default stands for them.
+  if (server.hasArg("intensity")) {
+    int i = server.arg("intensity").toInt();
+    if (i > 0 && i <= 100) motorIntensity = (uint8_t)i;
+  }
   sendJSON(readingJSON());
 }
 
 void handleBuzzTest() {
   buzzUntilMs = millis() + 400;
-  digitalWrite(MOTOR_PIN, HIGH);
+  motorOn();
   sendJSON(readingJSON());
 }
 
@@ -387,8 +459,9 @@ void setup() {
   Serial.println("ALIGN Wi-Fi firmware starting.");
 
   Wire.begin(SDA_PIN, SCL_PIN);
-  pinMode(MOTOR_PIN, OUTPUT);
-  digitalWrite(MOTOR_PIN, LOW);
+  // PWM, not plain OUTPUT: the buzz strength is a setting now.
+  motorPwmBegin();
+  motorOff();
 
   imuPresent = (imu.begin() == 0);
   Serial.println(imuPresent

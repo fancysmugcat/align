@@ -449,9 +449,89 @@ int batteryPercent() {
 
 // ---------------------------------------------------------------- buzzing
 
+/**
+ * Motors run on PWM, not a plain digital HIGH.
+ *
+ * They did not until now, and that quietly broke the Sensitivity setting. Calm,
+ * Normal and Quick each changed how readily the board decided you were leaning
+ * — the filter, the threshold, the grace period — and then all three fired the
+ * motor the same way: pin HIGH, full power, every time. "Calm" buzzed exactly
+ * as hard as "Quick". The wearer picks the gentle one, feels no difference,
+ * and stops believing the control does anything.
+ *
+ * 20 kHz is above hearing, so the motor is felt rather than heard whining;
+ * at 200 Hz a coin motor sings audibly at part duty.
+ */
+const int MOTOR_PWM_FREQ = 20000;
+const int MOTOR_PWM_BITS = 8;
+const int MOTOR_LEFT_CH  = 0;
+const int MOTOR_RIGHT_CH = 1;
+
+/**
+ * Break static friction before settling to the asked-for strength.
+ *
+ * A coin motor needs noticeably more power to start turning than to keep
+ * turning — below about half duty a stopped one simply buzzes the winding and
+ * never spins. So every buzz opens at full power for this long and then drops
+ * to the real duty. Without it, "Calm" would be indistinguishable from a dead
+ * motor, which is the exact failure this band has spent weeks chasing.
+ */
+const unsigned long MOTOR_KICK_MS = 60;
+
+/** Motor strength as a percent of full power; the site sets it per preset. */
+uint8_t motorIntensity = 78;
+
+/** Which motors are mid-buzz, so the kick can settle the right ones. */
+bool leftRunning = false;
+bool rightRunning = false;
+unsigned long kickUntilMs = 0;
+
+uint8_t motorDuty() {
+  uint16_t duty = ((uint16_t)motorIntensity * 255 + 50) / 100;
+  if (duty > 255) duty = 255;
+  return (uint8_t)duty;
+}
+
+/**
+ * The Arduino ESP32 core renamed all of this in 3.x: channels became implicit
+ * and the pin is what you write to. Both spellings are kept so the sketch
+ * builds on whichever core is installed rather than failing at link time with
+ * a missing ledcAttachPin.
+ */
+void motorPwmBegin(int pin, int channel) {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  (void)channel;
+  ledcAttach(pin, MOTOR_PWM_FREQ, MOTOR_PWM_BITS);
+#else
+  ledcSetup(channel, MOTOR_PWM_FREQ, MOTOR_PWM_BITS);
+  ledcAttachPin(pin, channel);
+#endif
+}
+
+void motorPwmWrite(int pin, int channel, uint8_t duty) {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  (void)channel;
+  ledcWrite(pin, duty);
+#else
+  (void)pin;
+  ledcWrite(channel, duty);
+#endif
+}
+
+void driveLeft(uint8_t duty) {
+  motorPwmWrite(MOTOR_LEFT_PIN, MOTOR_LEFT_CH, duty);
+}
+
+void driveRight(uint8_t duty) {
+  if (MOTOR_RIGHT_PIN >= 0) motorPwmWrite(MOTOR_RIGHT_PIN, MOTOR_RIGHT_CH, duty);
+}
+
 void motorsOff() {
-  digitalWrite(MOTOR_LEFT_PIN, LOW);
-  if (MOTOR_RIGHT_PIN >= 0) digitalWrite(MOTOR_RIGHT_PIN, LOW);
+  driveLeft(0);
+  driveRight(0);
+  leftRunning = false;
+  rightRunning = false;
+  kickUntilMs = 0;
 }
 
 void startBuzz(unsigned long now, unsigned long durationMs, BuzzSide side) {
@@ -463,13 +543,20 @@ void startBuzz(unsigned long now, unsigned long durationMs, BuzzSide side) {
   const bool single = (MOTOR_RIGHT_PIN < 0);
   motorsOff();
   if (single || side == BUZZ_BOTH) {
-    digitalWrite(MOTOR_LEFT_PIN, HIGH);
-    if (!single) digitalWrite(MOTOR_RIGHT_PIN, HIGH);
+    leftRunning = true;
+    rightRunning = !single;
   } else if (side == BUZZ_RIGHT) {
-    digitalWrite(MOTOR_RIGHT_PIN, HIGH);
+    rightRunning = true;
   } else {
-    digitalWrite(MOTOR_LEFT_PIN, HIGH);
+    leftRunning = true;
   }
+
+  // Full power first, dropped to the chosen strength by updateBuzz once the
+  // motor is actually turning.
+  kickUntilMs = now + MOTOR_KICK_MS;
+  if (leftRunning) driveLeft(255);
+  if (rightRunning) driveRight(255);
+  Serial.printf("Buzzing at %u%% (kick %lums).\n", (unsigned)motorIntensity, MOTOR_KICK_MS);
 }
 
 /** Which way the wearer is leaning, as the website reports it. */
@@ -484,6 +571,15 @@ void updateBuzz(unsigned long now) {
   if (probePin >= 0 && now >= probeUntilMs) {
     digitalWrite(probePin, LOW);
     probePin = -1;
+  }
+  // The opening kick has done its job; drop to the strength that was asked
+  // for. Checked before the expiry below so a buzz shorter than the kick just
+  // ends, rather than settling a motor that is already off.
+  if (kickUntilMs != 0 && now >= kickUntilMs) {
+    kickUntilMs = 0;
+    const uint8_t duty = motorDuty();
+    if (leftRunning) driveLeft(duty);
+    if (rightRunning) driveRight(duty);
   }
   if (buzzUntilMs != 0 && now >= buzzUntilMs) {
     motorsOff();
@@ -666,6 +762,14 @@ class BuzzCallbacks : public NimBLECharacteristicCallbacks {
       Serial.printf("Grace period set to %lums.\n", badPostureGraceMs);
     }
 
+    // Byte 9: how hard to run the motor, as a percent of full power. Older
+    // site builds stop at byte 8, so the compiled-in default stands for them.
+    if (value.length() >= 10 && value[9] > 0 && value[9] <= 100) {
+      motorIntensity = value[9];
+      Serial.printf("Motor strength set to %u%% (duty %u/255).\n",
+                    (unsigned)motorIntensity, (unsigned)motorDuty());
+    }
+
     Serial.printf("Buzz set to %.1fs past %.1f degrees.\n",
                   buzzTenths / 10.0f, tiltThreshold);
   }
@@ -812,8 +916,10 @@ void setup() {
   delay(1000);
 
   // Pins and chip are both probed — see findIMU().
-  pinMode(MOTOR_LEFT_PIN, OUTPUT);
-  if (MOTOR_RIGHT_PIN >= 0) pinMode(MOTOR_RIGHT_PIN, OUTPUT);
+  // PWM rather than plain OUTPUT: the strength of the buzz is a setting now,
+  // and a digital HIGH can only ever be full power.
+  motorPwmBegin(MOTOR_LEFT_PIN, MOTOR_LEFT_CH);
+  if (MOTOR_RIGHT_PIN >= 0) motorPwmBegin(MOTOR_RIGHT_PIN, MOTOR_RIGHT_CH);
   motorsOff();
 
   if (findIMU()) {

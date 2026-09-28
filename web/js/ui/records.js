@@ -3,6 +3,7 @@ import { openSheet } from './sheet.js';
 import { listProfiles } from '../stores/profile.js';
 import { loadSamples } from '../stores/storage.js';
 import { qualityLabel } from '../models.js';
+import { tableToPDF, QUALITY_COLOURS } from '../pdf.js';
 
 /**
  * Every reading this device has recorded, for every wearer, behind a password.
@@ -140,13 +141,19 @@ async function showRecords(body) {
 
   body.replaceChildren(
     h('p', { class: 'section-detail', text: `${rows.length} readings from ${countUsers(rows)} wearer${countUsers(rows) === 1 ? '' : 's'}, newest first.` }),
-    h('button', {
-      type: 'button', class: 'pill-button', text: 'Download CSV',
-      onClick: () => downloadCSV(rows),
-    }),
+    h('div', { class: 'button-pair' }, [
+      h('button', {
+        type: 'button', class: 'pill-button', text: 'Download CSV',
+        onClick: () => downloadCSV(rows),
+      }),
+      h('button', {
+        type: 'button', class: 'pill-button pill-button--ghost', text: 'Download PDF',
+        onClick: () => downloadPDF(rows),
+      }),
+    ]),
     h('p', {
       class: 'hint',
-      text: 'These are this device’s records. Another phone keeps its own — the site has no server to share them through, so the CSV is how they travel.',
+      text: 'These are this device’s records. Another phone keeps its own — the site has no server to share them through, so an export is how they travel. CSV opens in a spreadsheet; the PDF is the one to hand to somebody.',
     }),
     table,
     more,
@@ -190,14 +197,62 @@ function downloadCSV(rows) {
     ...rows.map((row) => [row.user, row.date, row.time, row.angle, row.quality].map(escape).join(',')),
   ];
 
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  save(
+    new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }),
+    `align-records-${isoDate(new Date())}.csv`,
+  );
+}
+
+/**
+ * The same table, laid out for paper.
+ *
+ * CSV is the export for a spreadsheet; this is the one for a person. The angle
+ * column is right-aligned because a column of numbers is unreadable otherwise,
+ * and the quality column keeps its colour so the printout can be skimmed the
+ * way the screen is.
+ */
+function downloadPDF(rows) {
+  const wearers = countUsers(rows);
+  const span = rows.length > 0
+    ? `${rows[rows.length - 1].date} to ${rows[0].date}`
+    : 'no readings';
+
+  const blob = tableToPDF({
+    title: 'ALIGN posture records',
+    subtitle: `${rows.length} reading${rows.length === 1 ? '' : 's'} from `
+      + `${wearers} wearer${wearers === 1 ? '' : 's'}, ${span}. `
+      + `Exported ${isoDate(new Date())} at ${clockTime(new Date())}, newest first.`,
+    footnote: 'Recorded on one device. Angles are degrees off that wearer\u2019s calibrated upright.',
+    columns: [
+      { label: 'Wearer', width: 150 },
+      { label: 'Date', width: 90 },
+      { label: 'Time', width: 80 },
+      { label: 'Angle', width: 65, align: 'right' },
+      { label: 'Quality', width: 90 },
+    ],
+    rows: rows.map((row) => [
+      row.user, row.date, row.time, `${row.angle.toFixed(1)}\u00B0`, row.quality,
+    ]),
+    // Column 4 is Quality; every other cell stays the default ink.
+    colourFor: (row, column) => (column === 4 ? QUALITY_COLOURS[row[4]] ?? null : null),
+  });
+
+  save(blob, `align-records-${isoDate(new Date())}.pdf`);
+}
+
+/**
+ * Hands a blob to the browser as a download.
+ *
+ * The object URL is revoked on a delay rather than immediately: some browsers
+ * treat revoking as cancelling if they have not started reading the blob yet,
+ * which loses the file with no error anywhere.
+ */
+function save(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const link = h('a', { href: url, download: `align-records-${isoDate(new Date())}.csv` });
+  const link = h('a', { href: url, download: filename });
   document.body.append(link);
   link.click();
   link.remove();
-  // Revoked on a delay: revoking immediately cancels the download in some
-  // browsers before it has started reading the blob.
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 

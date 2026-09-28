@@ -30,15 +30,21 @@ export function openSettings({ device, posture, settings, sync, profile, actions
   const unsubscribeSync = sync.subscribe(render);
 
   function render() {
-    body.replaceChildren(
+    // Filtered rather than spread straight in: a card that decides it has
+    // nothing to show returns null, and `replaceChildren` would happily turn
+    // that into a text node reading "null". `h` filters its own children, but
+    // this is the raw DOM call at the top.
+    const cards = [
       profileCard({ profile, actions }),
       batteryCard(device),
       sensitivityCard(settings),
       buzzCard(settings),
       deviceCard({ device, posture, settings, actions, close: sheet.close }),
       issuesSection(settings),
+      diagnosticsCard(device),
       dataSection(posture),
-    );
+    ].filter(Boolean);
+    body.replaceChildren(...cards);
   }
 
   render();
@@ -139,14 +145,14 @@ function sensitivityCard(settings) {
     h('p', {
       class: 'hint',
       text: level.id === 'calm'
-        ? 'Steadiest. Ignores small movements and takes about a second and a half to follow a real one.'
+        ? 'Steadiest, and the gentlest buzz. Ignores small movements and takes about a second and a half to follow a real one.'
         : level.id === 'quick'
-          ? 'Follows you closely, at the cost of the reading twitching while you sit still.'
-          : 'A middle setting: settles in under a second and ignores ordinary sway.',
+          ? 'Follows you closely and buzzes at full strength, at the cost of the reading twitching while you sit still.'
+          : 'A middle setting: settles in under a second, ignores ordinary sway, and buzzes firmly without being a jolt.',
     }),
     h('p', {
       class: 'hint',
-      text: `Below ${level.leanThreshold}° counts as centred, the angle reads zero under ${level.deadband}°, and a lean must be held ${level.graceMs / 1000}s before the motor buzzes. This also sets how hard the board filters its own accelerometer.`,
+      text: `Below ${level.leanThreshold}° counts as centred, the angle reads zero under ${level.deadband}°, and a lean must be held ${level.graceMs / 1000}s before the motor buzzes at ${level.intensity}% power. This also sets how hard the board filters its own accelerometer.`,
     }),
   ]);
 }
@@ -224,40 +230,14 @@ function deviceCard({ device, posture, settings, actions, close }) {
     ]),
     h('p', {
       class: 'hint',
-      text: 'Each buzzes that side for half a second. "Buzz left" drives GPIO 4, "Buzz right" drives GPIO 0.',
+      text: 'Each buzzes that side for half a second, at the strength the current sensitivity uses.',
     }),
-    // What the board says about itself while you press them. A silent motor
-    // with "board says: buzzing" is a wiring fault; a silent motor with
-    // nothing here means the command never arrived.
-    h('p', { class: 'hint' }, [
-      device.boardBuzzing ? 'Board says: a motor is running now. ' : 'Board says: no motor running. ',
-      device.channels
-        ? `Channels — readings ${device.channels.notify ? 'yes' : 'NO'}, buzz ${device.channels.buzz ? 'yes' : 'NO'}, commands ${device.channels.command ? 'yes' : 'NO'}. `
-        : '',
-      // The receipt. If pressing a button moves "sent" but not "board got",
-      // the write is not arriving; if both move and nothing buzzes, the motor
-      // is dead. Nothing else separates those two.
-      `Writes sent ${device.writesSent}, board got ${device.boardWrites ?? '—'}.`,
-    ]),
+    // The counters behind this live in Diagnostics, but a write that outright
+    // failed is not a debugging detail — it is the reason the button the
+    // wearer just pressed did nothing, so it stays here.
     device.lastWriteError
       ? h('p', { class: 'hint hint--warn', text: `Last write failed: ${device.lastWriteError}` })
       : null,
-
-    // GPIO 4 has stayed silent on every path while GPIO 0 answers whenever
-    // anything reaches it. Either that motor is dead or it is on another pin,
-    // and only the band can say which — so the pins are pulsed from here
-    // rather than by reflashing a finder sketch for each guess.
-    h('p', { class: 'row-label', text: 'Find a motor' }),
-    h('div', { class: 'pin-row' }, [1, 2, 3, 5, 10, 20, 21].map((pin) => h('button', {
-      type: 'button', class: 'pill-button pill-button--ghost', text: `${pin}`,
-      disabled: !connected,
-      title: `Pulse GPIO ${pin} for half a second`,
-      onClick: () => device.probeMotorPin(pin),
-    }))),
-    h('p', {
-      class: 'hint',
-      text: 'Hold the motor that never buzzes and tap each number. If one of them makes it move, that is the pin it is wired to — tell me which and I will set it. If none do, the motor or its wiring is the fault.',
-    }),
 
     h('hr', { class: 'divider' }),
     row('Bad posture buzzes', settings.buzzBoth ? 'Both motors' : 'The leaning side', true),
@@ -329,6 +309,68 @@ function row(label, value, positive) {
   return h('div', { class: 'row' }, [
     h('span', { class: 'row-label', text: label }),
     h('span', { class: `row-value${positive ? '' : ' row-value--bad'}`, text: value }),
+  ]);
+}
+
+// MARK: - Diagnostics
+
+/**
+ * The pin hunt and the raw write counters, shown only in demo mode.
+ *
+ * These were on the device card, in front of everyone. They exist because one
+ * motor stayed silent on every path and only the band could say which pin it
+ * was actually on — a real question, but a question for whoever is debugging
+ * the hardware, not for someone wearing the band. A row of bare GPIO numbers
+ * and a "writes sent 4, board got 3" counter on the shipped site invites taps
+ * that can only confuse.
+ *
+ * Demo mode is where the site already admits to being a workbench, so that is
+ * where they live now. Turning it on does not hang up an existing connection,
+ * so the probes still reach a real board: connect first, then switch demo on,
+ * and the buttons drive actual pins. With nothing connected they are disabled
+ * rather than silently doing nothing.
+ */
+function diagnosticsCard(device) {
+  if (!device.isDemo) return null;
+
+  const live = device.canReachBoard;
+
+  return card({ title: 'Diagnostics' }, [
+    h('p', {
+      class: 'hint',
+      text: live
+        ? 'Demo mode is on and a board is still connected, so these drive real pins.'
+        : 'No board is connected, so these are disabled. Connect first, then turn demo mode on — it leaves the connection up.',
+    }),
+
+    // GPIO 4 stayed silent on every path while GPIO 0 answered whenever
+    // anything reached it. Either that motor is dead or it is on another pin,
+    // and only the band can say which — so the pins are pulsed from here
+    // rather than by reflashing a finder sketch for each guess.
+    h('p', { class: 'row-label', text: 'Find a motor' }),
+    h('div', { class: 'pin-row' }, [1, 2, 3, 5, 10, 20, 21].map((pin) => h('button', {
+      type: 'button', class: 'pill-button pill-button--ghost', text: `${pin}`,
+      disabled: !live,
+      title: `Pulse GPIO ${pin} for half a second`,
+      onClick: () => device.probeMotorPin(pin),
+    }))),
+    h('p', {
+      class: 'hint',
+      text: 'Hold the motor that never buzzes and tap each number. If one of them makes it move, that is the pin it is wired to. If none do, the motor or its wiring is the fault.',
+    }),
+
+    h('hr', { class: 'divider' }),
+    // The receipt. If pressing a button moves "sent" but not "board got", the
+    // write is not arriving; if both move and nothing buzzes, the motor is
+    // dead. Nothing else separates those two.
+    h('p', { class: 'row-label', text: 'What the board says' }),
+    h('p', { class: 'hint' }, [
+      device.boardBuzzing ? 'A motor is running now. ' : 'No motor running. ',
+      device.channels
+        ? `Channels — readings ${device.channels.notify ? 'yes' : 'NO'}, buzz ${device.channels.buzz ? 'yes' : 'NO'}, commands ${device.channels.command ? 'yes' : 'NO'}. `
+        : '',
+      `Writes sent ${device.writesSent}, board got ${device.boardWrites ?? '—'}.`,
+    ]),
   ]);
 }
 

@@ -467,6 +467,80 @@ const uint16_t PATTERN_BOARD_ONLINE[]   = { 200 };
 // The "test buzz" from the calibration screen.
 const uint16_t PATTERN_TEST[]           = { 400 };
 
+/**
+ * Motor strength, and why the motor runs on PWM rather than a digital HIGH.
+ *
+ * The site's Sensitivity setting used to change only how readily the board
+ * decided you were leaning, never what the buzz felt like — every preset drove
+ * the pin fully on, so "Calm" and "Normal" were identical on the wrist. The
+ * site now sends a strength with the buzz settings and this drives it.
+ *
+ * 20 kHz keeps the carrier above hearing; a coin motor sings audibly at a few
+ * hundred hertz once it is at part duty.
+ */
+const int MOTOR_PWM_FREQ = 20000;
+const int MOTOR_PWM_BITS = 8;
+const int MOTOR_PWM_CH   = 0;
+
+/**
+ * A stopped coin motor needs more power to start than to keep turning, so
+ * every pulse opens at full power for this long before settling to the chosen
+ * strength. Without it a gentle setting just buzzes the winding silently,
+ * which is indistinguishable from the dead motor this band has spent weeks
+ * chasing.
+ */
+const unsigned long MOTOR_KICK_MS = 60;
+
+/** Percent of full power, set from the site. */
+uint8_t motorIntensity = 78;
+bool motorWanted = false;
+unsigned long motorKickUntilMs = 0;
+
+uint8_t motorDuty() {
+  uint16_t duty = ((uint16_t)motorIntensity * 255 + 50) / 100;
+  if (duty > 255) duty = 255;
+  return (uint8_t)duty;
+}
+
+/** The ESP32 core renamed LEDC in 3.x; both spellings are kept so this builds
+ *  on whichever core is installed. */
+void motorPwmBegin() {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcAttach(MOTOR_PIN, MOTOR_PWM_FREQ, MOTOR_PWM_BITS);
+#else
+  ledcSetup(MOTOR_PWM_CH, MOTOR_PWM_FREQ, MOTOR_PWM_BITS);
+  ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CH);
+#endif
+}
+
+void motorPwmWrite(uint8_t duty) {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(MOTOR_PIN, duty);
+#else
+  ledcWrite(MOTOR_PWM_CH, duty);
+#endif
+}
+
+void motorOn() {
+  motorWanted = true;
+  motorKickUntilMs = millis() + MOTOR_KICK_MS;
+  motorPwmWrite(255);
+}
+
+void motorOff() {
+  motorWanted = false;
+  motorKickUntilMs = 0;
+  motorPwmWrite(0);
+}
+
+/** Drops from the opening kick to the strength that was actually asked for. */
+void updateMotor(unsigned long now) {
+  if (motorKickUntilMs != 0 && now >= motorKickUntilMs) {
+    motorKickUntilMs = 0;
+    if (motorWanted) motorPwmWrite(motorDuty());
+  }
+}
+
 bool patternRunning() { return patternLength > 0; }
 
 void startPattern(const uint16_t *steps, uint8_t count) {
@@ -475,7 +549,7 @@ void startPattern(const uint16_t *steps, uint8_t count) {
   patternLength = count;
   patternAt = 0;
   patternStepEndsMs = millis() + patternSteps[0];
-  digitalWrite(MOTOR_PIN, HIGH);         // even steps are on
+  motorOn();                             // even steps are on
 }
 
 void updatePattern(unsigned long now) {
@@ -485,14 +559,15 @@ void updatePattern(unsigned long now) {
   patternAt++;
   if (patternAt >= patternLength) {
     patternLength = 0;
-    digitalWrite(MOTOR_PIN, LOW);
+    motorOff();
     return;
   }
-  digitalWrite(MOTOR_PIN, (patternAt % 2 == 0) ? HIGH : LOW);
+  if (patternAt % 2 == 0) motorOn(); else motorOff();
   patternStepEndsMs = now + patternSteps[patternAt];
 }
 
 void updateBuzz(unsigned long now) {
+  updateMotor(now);
   updatePattern(now);
 
   // Never cut a pattern short — a posture buzz landing on top of the
@@ -601,6 +676,16 @@ void onCommand(char *topic, byte *payload, unsigned int length) {
   if (!isnan(threshold) && threshold > 0 && threshold < 90) {
     tiltThreshold = threshold;
   }
+
+  // How hard to run the motor, as a percent of full power. Older site builds
+  // never send it, so the compiled-in default stands for them.
+  float strength = numberAfter(body, "\"intensity\"");
+  if (!isnan(strength) && strength > 0 && strength <= 100) {
+    motorIntensity = (uint8_t)lround(strength);
+    Serial.print("Motor strength set to ");
+    Serial.print(motorIntensity);
+    Serial.println("%");
+  }
 }
 
 /**
@@ -675,6 +760,10 @@ void handleBuzz() {
   if (server.hasArg("threshold")) {
     float t = server.arg("threshold").toFloat();
     if (t > 0 && t < 90) tiltThreshold = t;
+  }
+  if (server.hasArg("intensity")) {
+    int i = server.arg("intensity").toInt();
+    if (i > 0 && i <= 100) motorIntensity = (uint8_t)i;
   }
   sendJSON(readingJSON());
 }
@@ -966,8 +1055,9 @@ void setup() {
   Serial.println();
   Serial.println("ALIGN cloud firmware starting.");
 
-  pinMode(MOTOR_PIN, OUTPUT);
-  digitalWrite(MOTOR_PIN, LOW);
+  // PWM, not plain OUTPUT: the buzz strength is a setting now.
+  motorPwmBegin();
+  motorOff();
 
   Serial.println("Looking for an IMU (MPU-6050 or LSM6DS3)...");
   if (findIMU()) {
