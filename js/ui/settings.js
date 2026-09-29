@@ -145,14 +145,14 @@ function sensitivityCard(settings) {
     h('p', {
       class: 'hint',
       text: level.id === 'calm'
-        ? 'Steadiest, and the gentlest buzz. Ignores small movements and takes about a second and a half to follow a real one.'
+        ? 'Steadiest, and asks for the gentlest buzz. Ignores small movements and takes about a second and a half to follow a real one.'
         : level.id === 'quick'
           ? 'Follows you closely and buzzes at full strength, at the cost of the reading twitching while you sit still.'
           : 'A middle setting: settles in under a second, ignores ordinary sway, and buzzes firmly without being a jolt.',
     }),
     h('p', {
       class: 'hint',
-      text: `Below ${level.leanThreshold}° counts as centred, the angle reads zero under ${level.deadband}°, and a lean must be held ${level.graceMs / 1000}s before the motor buzzes at ${level.intensity}% power. This also sets how hard the board filters its own accelerometer.`,
+      text: `Below ${level.leanThreshold}° counts as centred, the angle reads zero under ${level.deadband}°, and a lean must be held ${level.graceMs / 1000}s before the motor buzzes. This preset asks the board for ${level.intensity}% motor power, and sets how hard it filters its own accelerometer.`,
     }),
   ]);
 }
@@ -230,7 +230,7 @@ function deviceCard({ device, posture, settings, actions, close }) {
     ]),
     h('p', {
       class: 'hint',
-      text: 'Each buzzes that side for half a second, at the strength the current sensitivity uses.',
+      text: 'Each buzzes that side for half a second, at the strength the current sensitivity asks for.',
     }),
     // The counters behind this live in Diagnostics, but a write that outright
     // failed is not a debugging detail — it is the reason the button the
