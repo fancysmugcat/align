@@ -845,3 +845,18 @@ body.signed-out .topbar-actions { display: none; }
 .records-quality--green { color: var(--zone-good); }
 .records-quality--yellow { color: var(--zone-poor); }
 .records-quality--red { color: var(--zone-bad); }
+
+/* Where an export says what became of it — see records.js. On iOS a download
+   cannot be trusted to happen, so the outcome is always shown rather than
+   assumed. */
+.export-note { display: flex; flex-direction: column; gap: 6px; }
+.export-note:empty { display: none; }
+.export-link {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--zone-good);
+  text-decoration: underline;
+  padding: 6px 0;
+}

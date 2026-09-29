@@ -4,6 +4,7 @@ import { listProfiles } from '../stores/profile.js';
 import { loadSamples } from '../stores/storage.js';
 import { qualityLabel } from '../models.js';
 import { tableToPDF, QUALITY_COLOURS } from '../pdf.js';
+import { isIOS } from '../device.js';
 
 /**
  * Every reading this device has recorded, for every wearer, behind a password.
@@ -139,21 +140,33 @@ async function showRecords(body) {
   more.addEventListener('click', () => { shown += PAGE_SIZE; draw(); });
   draw();
 
+  // Where an export reports what became of it. Blank until one is tried.
+  const outcome = h('div', { class: 'export-note' });
+  const say = (message, link = null) => {
+    outcome.replaceChildren(
+      h('p', { class: 'hint', text: message }),
+      ...(link ? [link] : []),
+    );
+  };
+
   body.replaceChildren(
     h('p', { class: 'section-detail', text: `${rows.length} readings from ${countUsers(rows)} wearer${countUsers(rows) === 1 ? '' : 's'}, newest first.` }),
     h('div', { class: 'button-pair' }, [
       h('button', {
         type: 'button', class: 'pill-button', text: 'Download CSV',
-        onClick: () => downloadCSV(rows),
+        onClick: () => downloadCSV(rows, say),
       }),
       h('button', {
         type: 'button', class: 'pill-button pill-button--ghost', text: 'Download PDF',
-        onClick: () => downloadPDF(rows),
+        onClick: () => downloadPDF(rows, say),
       }),
     ]),
+    outcome,
     h('p', {
       class: 'hint',
-      text: 'These are this device’s records. Another phone keeps its own — the site has no server to share them through, so an export is how they travel. CSV opens in a spreadsheet; the PDF is the one to hand to somebody.',
+      text: isIOS()
+        ? 'These are this device’s records. CSV opens in a spreadsheet; the PDF is the one to hand to somebody. On iPhone an export goes through the share sheet — choose “Save to Files”.'
+        : 'These are this device’s records. Another phone keeps its own — the site has no server to share them through, so an export is how they travel. CSV opens in a spreadsheet; the PDF is the one to hand to somebody.',
     }),
     table,
     more,
@@ -187,7 +200,7 @@ function countUsers(rows) {
   return new Set(rows.map((row) => row.user)).size;
 }
 
-function downloadCSV(rows) {
+function downloadCSV(rows, say) {
   const escape = (value) => {
     const text = String(value);
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -197,9 +210,10 @@ function downloadCSV(rows) {
     ...rows.map((row) => [row.user, row.date, row.time, row.angle, row.quality].map(escape).join(',')),
   ];
 
-  save(
+  return deliver(
     new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }),
     `align-records-${isoDate(new Date())}.csv`,
+    say,
   );
 }
 
@@ -211,7 +225,7 @@ function downloadCSV(rows) {
  * and the quality column keeps its colour so the printout can be skimmed the
  * way the screen is.
  */
-function downloadPDF(rows) {
+function downloadPDF(rows, say) {
   const wearers = countUsers(rows);
   const span = rows.length > 0
     ? `${rows[rows.length - 1].date} to ${rows[0].date}`
@@ -237,23 +251,144 @@ function downloadPDF(rows) {
     colourFor: (row, column) => (column === 4 ? QUALITY_COLOURS[row[4]] ?? null : null),
   });
 
-  save(blob, `align-records-${isoDate(new Date())}.pdf`);
+  return deliver(blob, `align-records-${isoDate(new Date())}.pdf`, say);
 }
 
 /**
- * Hands a blob to the browser as a download.
+ * Hands a file to the browser, by whichever route this browser actually has.
  *
- * The object URL is revoked on a delay rather than immediately: some browsers
- * treat revoking as cancelling if they have not started reading the blob yet,
- * which loses the file with no error anywhere.
+ * ── Why this is not just `<a download>` ──────────────────────────────────
+ *
+ * It was, and on iOS that does nothing at all. Every browser on iPhone is
+ * WebKit underneath, and in an app-hosted web view — Bluefy, which is how this
+ * site gets Bluetooth on iOS in the first place — a download only happens if
+ * the host app implements WebKit's download delegate. Most browser shells do
+ * not. The anchor is clicked, no file appears, no error is raised anywhere:
+ * the button is simply dead. That is exactly what it looked like from the
+ * outside, and the silence is the worst part of it.
+ *
+ * So the routes are tried in the order that suits the platform, and whichever
+ * one is taken, it says so. A button that cannot explain itself is how this
+ * broke quietly for a week.
+ *
+ * @param {Blob} blob
+ * @param {string} filename
+ * @param {(message: string, link?: HTMLElement|null) => void} say Reports the
+ *   outcome into the sheet, so nothing fails silently again.
  */
-function save(blob, filename) {
+async function deliver(blob, filename, say) {
+  if (isIOS()) {
+    // The share sheet is the only reliable way onto an iPhone's filesystem
+    // from a web page; "Save to Files" lives inside it.
+    if (await shareFile(blob, filename, say)) return;
+    // Failing that, WebKit renders a PDF itself, and its viewer has a share
+    // button of its own.
+    if (openInTab(blob, filename, say)) return;
+    // And failing even that, hand over a link for the wearer to tap. A tap is
+    // a gesture the web view will honour where a scripted click was ignored.
+    say(
+      `This browser would not save ${filename} on its own. Tap the link to open it, then use the share button to keep a copy.`,
+      tapLink(blob, filename),
+    );
+    return;
+  }
+
+  if (anchorDownload(blob, filename)) {
+    say(`Saved ${filename}.`);
+    return;
+  }
+  if (await shareFile(blob, filename, say)) return;
+  if (openInTab(blob, filename, say)) return;
+  say(`This browser would not save ${filename}.`, tapLink(blob, filename));
+}
+
+/**
+ * The share sheet, which on iOS is the route to Files.
+ *
+ * `navigator.share` must be reached inside the tap that started this, so
+ * nothing above it may await — the blob is built synchronously for that
+ * reason. A share the wearer backs out of counts as handled: they chose that,
+ * and falling through to another route would fight them for it.
+ */
+async function shareFile(blob, filename, say) {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return false;
+  if (typeof File !== 'function') return false;
+
+  let file;
+  try {
+    file = new File([blob], filename, { type: blob.type });
+  } catch {
+    return false;
+  }
+  if (typeof navigator.canShare === 'function' && !navigator.canShare({ files: [file] })) {
+    return false;
+  }
+
+  try {
+    await navigator.share({ files: [file], title: filename });
+    say(`Shared ${filename}. Choose "Save to Files" to keep a copy on this phone.`);
+    return true;
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      say('Export cancelled.');
+      return true;
+    }
+    return false;
+  }
+}
+
+/** Opens the file in a new tab and lets the browser's own viewer take it. */
+function openInTab(blob, filename, say) {
+  const url = URL.createObjectURL(blob);
+  let opened = null;
+  try {
+    opened = window.open(url, '_blank');
+  } catch {
+    opened = null;
+  }
+  if (!opened) {
+    URL.revokeObjectURL(url);
+    return false;
+  }
+  // A minute, not ten seconds: the new tab is still reading from this URL,
+  // and revoking it early leaves a blank page with nothing to explain it.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  say(`Opened ${filename} in a new tab. Use the share button there to save it.`);
+  return true;
+}
+
+/** A real link to tap, for when a scripted click is being ignored. */
+function tapLink(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  setTimeout(() => URL.revokeObjectURL(url), 300000);
+  return h('a', {
+    href: url,
+    target: '_blank',
+    rel: 'noopener',
+    download: filename,
+    class: 'export-link',
+    text: `Open ${filename}`,
+  });
+}
+
+/**
+ * The ordinary desktop route.
+ *
+ * Whether the file truly arrived cannot be observed from here, so this is only
+ * trusted on platforms where it is known to work — which is why iOS never
+ * reaches it.
+ */
+function anchorDownload(blob, filename) {
+  if (typeof document === 'undefined') return false;
   const url = URL.createObjectURL(blob);
   const link = h('a', { href: url, download: filename });
   document.body.append(link);
   link.click();
   link.remove();
+  // Revoked on a delay: revoking immediately cancels the download in some
+  // browsers before it has started reading the blob.
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return true;
 }
 
 function isoDate(date) {
