@@ -8,6 +8,8 @@ const ENDPOINT_KEY = 'align.sheetEndpoint';
 const LAST_SYNC_KEY = 'align.lastSync';
 /** Newest reading already written, so a sync only sends what is new. */
 const HIGH_WATER_KEY = 'align.lastReadingSent';
+/** Readings per post. Under the Apps Script's own ceiling of 3000. */
+const READINGS_PER_SYNC = 2000;
 
 /**
  * Pushes each profile's daily rollups into the ALIGN Google Sheet.
@@ -169,7 +171,7 @@ export class SheetSync {
     // up — resending a fortnight every few minutes would be tens of thousands
     // of rows for no gain.
     const since = readJSON(scopedHighWater(this.profile.id));
-    const readings = this.posture.samplesSince(since).map((sample) => ({
+    const readings = this.posture.samplesSince(since, READINGS_PER_SYNC).map((sample) => ({
       at: sample.date.toISOString(),
       date: isoDate(sample.date),
       time: clockTime(sample.date),
@@ -222,7 +224,9 @@ export class SheetSync {
 
     try {
       const result = await post(endpoint, payload);
-      this.dirty = false;
+      // A full batch means more is waiting (a first sync carries the whole
+      // history); stay dirty so the next tick sends the rest.
+      this.dirty = payload.readings.length >= READINGS_PER_SYNC;
       writeJSON(LAST_SYNC_KEY, new Date().toISOString());
       // Only advance once the sheet has confirmed the write, or a failed sync
       // would silently drop the readings it was carrying.

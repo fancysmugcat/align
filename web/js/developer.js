@@ -1,6 +1,7 @@
 import { h, card } from './ui/components.js';
 import { listProfiles } from './stores/profile.js';
 import { collectRows, renderRecords, passwordMatches } from './ui/records.js';
+import { SHEET_URL } from './config.js';
 
 /**
  * The developer page: every wearer's records, behind a password.
@@ -9,7 +10,12 @@ import { collectRows, renderRecords, passwordMatches } from './ui/records.js';
  * readings. It sits on the same origin as the app, which is the only reason it
  * can see them at all: the records live in this browser's storage, so this
  * page shows everyone who has used ALIGN *in this browser on this device*, not
- * every ALIGN user everywhere. A site with no server has no wider view to give.
+ * every ALIGN user everywhere.
+ *
+ * The view across every device is the Google Sheet each wearer's readings sync
+ * into, so the right password goes straight there. The sheet keeps its own
+ * Google sharing, so the link opens only for accounts it is shared with; the
+ * password here is not what protects it.
  */
 
 const cards = document.getElementById('cards');
@@ -42,7 +48,9 @@ function showPasswordPrompt() {
     problem.textContent = '';
     if (await passwordMatches(field.value)) {
       rememberUnlocked();
-      await showEverything();
+      // replace(), not assign(): Back from the sheet returns to the app rather
+      // than to this page, which would only send them on to the sheet again.
+      window.location.replace(SHEET_URL);
       return;
     }
     problem.textContent = 'Wrong password.';
@@ -80,6 +88,12 @@ async function showEverything() {
 
   cards.replaceChildren(
     card({
+      title: 'Google Sheet',
+      subtitle: 'Every wearer’s readings, from every device.',
+    }, [
+      h('a', { class: 'pill-button', href: SHEET_URL, text: 'Open the Google Sheet' }),
+    ]),
+    card({
       title: 'Wearers',
       subtitle: `${profiles.length} profile${profiles.length === 1 ? '' : 's'} on this device.`,
     }, [
@@ -90,7 +104,7 @@ async function showEverything() {
     card({ title: 'All records' }, [recordsBody]),
     h('p', {
       class: 'hint',
-      text: 'Records are kept in each browser, not on a server. This page shows everyone who has used ALIGN in this browser on this device; a wearer on another phone appears only on that phone.',
+      text: 'The lists above are what this browser holds: everyone who has used ALIGN on this device. Wearers on other phones are in the Google Sheet.',
     }),
   );
 }
