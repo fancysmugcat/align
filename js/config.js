@@ -45,7 +45,7 @@ export const SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzcIDN
 export const SHEET_TOKEN = 'align-band';
 
 /** The spreadsheet the Apps Script writes into — linked from Settings. */
-export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1uoke7yfkuou37s75tvZF1xvu19eIY8lukysSukW_YSk/edit';
+export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1wq9bwR7W5KhUoX1XLZxLyMH-6Yml-5iEYhmtSsWTSm8/edit';
 
 /** How often a signed-in profile pushes new readings up, in minutes. */
 export const SYNC_INTERVAL_MINUTES = 5;
