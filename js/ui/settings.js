@@ -400,13 +400,13 @@ function dataSection(posture, profile) {
       text: `Every reading recorded for ${profile.name} on this device.`,
     }),
     h('button', {
-      type: 'button', class: 'pill-button', text: 'Open records',
+      type: 'button', class: 'pill-button', text: 'My records',
       onClick: () => openRecords(profile),
     }),
     // Every wearer's records live on their own password-protected page, so
     // the table of other people's readings is never one tap from a wearer.
     h('button', {
-      type: 'button', class: 'pill-button pill-button--ghost', text: 'For the developer',
+      type: 'button', class: 'pill-button pill-button--ghost', text: 'Developer database',
       onClick: () => { window.location.href = 'developer.html'; },
     }),
     h('button', {

@@ -11,7 +11,7 @@ import { isIOS } from '../device.js';
  *
  * ── Who sees what ────────────────────────────────────────────────────────
  *
- * Settings → Data → Open records shows the signed-in wearer their own
+ * Settings → Data → My records shows the signed-in wearer their own
  * readings and nobody else's. Every wearer who has used this browser is listed
  * only on the developer page (`developer.html`), which sits behind a password.
  *
