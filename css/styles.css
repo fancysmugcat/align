@@ -885,3 +885,6 @@ body.signed-out .topbar-actions { display: none; }
 .wearer-row-name { font-weight: 700; color: var(--green); }
 .wearer-row-count { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 .wearer-row-detail { grid-column: 1 / -1; color: var(--ink-muted); font-size: 12px; }
+
+/* A link styled as a button (the developer page's Google Sheet link). */
+a.pill-button { display: inline-block; align-self: flex-start; text-decoration: none; }
