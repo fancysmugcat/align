@@ -7,76 +7,47 @@ import { tableToPDF, QUALITY_COLOURS } from '../pdf.js';
 import { isIOS } from '../device.js';
 
 /**
- * Every reading this device has recorded, for every wearer, behind a password.
+ * Posture records, in two views.
  *
- * ── What this is and is not ──────────────────────────────────────────────
+ * ── Who sees what ────────────────────────────────────────────────────────
  *
- * It reads the same store the charts do, so it is the whole history rather
- * than a copy that can drift. It is *this device's* history: the site is a
- * static page with nowhere to put a shared database, so a second phone keeps
- * its own records and neither can see the other's. Export is how data moves
- * between them.
+ * Settings → Data → Open records shows the signed-in wearer their own
+ * readings and nobody else's. Every wearer who has used this browser is listed
+ * only on the developer page (`developer.html`), which sits behind a password.
  *
- * The password keeps the table off the screen of whoever picks the phone up.
- * It cannot do more than that: the check runs in the browser, so anyone
- * willing to read this file can bypass it. Real protection would need a
- * server to hold the data and decide who sees it, which this project does not
- * have. It is a lock on a drawer, not on a vault — enough for the case it is
- * actually for, and worth being honest about for the case it is not.
+ * Both read the same store the charts do, so neither is a copy that can drift.
+ * It is *this device's* history: the site is a static page with nowhere to put
+ * a shared database, so a second phone keeps its own records and neither can
+ * see the other's. Export is how data moves between them.
+ *
+ * The password keeps the developer table off the screen of whoever picks the
+ * phone up. It cannot do more than that: the check runs in the browser, so
+ * anyone willing to read the source can bypass it. Real protection would need
+ * a server to hold the data and decide who sees it, which this project does
+ * not have. It is a lock on a drawer, not on a vault.
  */
 
 /**
- * SHA-256 of the passphrase.
+ * SHA-256 of the developer password.
  *
  * Hashed rather than written in plainly so the password is not simply
- * readable in the page source — which would make the gate pointless the
- * moment anyone looked.
+ * readable in the page source, which is public on GitHub Pages.
  */
 const PASSWORD_HASH = '30d58acecfaf5a4609e0ff302a91982ee3ba790e1449290f4d983763c0d86655';
 
 /** Rows are heavy; this many at a time keeps the table usable on a phone. */
 const PAGE_SIZE = 200;
 
-export function openRecords() {
+/** The signed-in wearer's own readings, in a sheet over Settings. */
+export function openRecords(profile) {
   const body = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
-  const sheet = openSheet({ title: 'Records', closeLabel: 'Close', body });
+  const sheet = openSheet({ title: 'My records', closeLabel: 'Close', body });
 
-  showPasswordPrompt(body);
+  body.replaceChildren(h('p', { class: 'hint', text: 'Reading records…' }));
+  collectRows([profile]).then((rows) => {
+    renderRecords(body, rows, { showUser: false, owner: profile.name });
+  });
   return sheet;
-}
-
-function showPasswordPrompt(body) {
-  const field = h('input', {
-    type: 'password', class: 'field', placeholder: 'Password',
-    'aria-label': 'Records password', autocomplete: 'current-password',
-  });
-  const problem = h('p', { class: 'hint hint--warn' });
-
-  async function attempt() {
-    problem.textContent = '';
-    if (await matches(field.value)) {
-      body.replaceChildren();
-      await showRecords(body);
-      return;
-    }
-    problem.textContent = 'Wrong password.';
-    field.value = '';
-    field.focus();
-  }
-
-  field.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') attempt();
-  });
-
-  body.replaceChildren(
-    h('p', { class: 'section-detail', text: 'Everything this device has recorded, for every wearer.' }),
-    h('div', { class: 'endpoint-row' }, [
-      field,
-      h('button', { type: 'button', class: 'pill-button', text: 'Open', onClick: attempt }),
-    ]),
-    problem,
-  );
-  field.focus();
 }
 
 /**
@@ -84,7 +55,7 @@ function showPasswordPrompt(body) {
  * sight. The check still happens in the browser, so this raises the effort
  * required rather than making it impossible.
  */
-async function matches(entered) {
+export async function passwordMatches(entered) {
   try {
     const bytes = new TextEncoder().encode(String(entered ?? ''));
     const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -97,21 +68,28 @@ async function matches(entered) {
   }
 }
 
-async function showRecords(body) {
-  const loading = h('p', { class: 'hint', text: 'Reading records…' });
-  body.replaceChildren(loading);
-
-  const rows = await collectRows();
+/**
+ * Draws a records table with its export buttons into `body`.
+ *
+ * @param {HTMLElement} body
+ * @param {Array} rows from `collectRows`, newest first
+ * @param {{ showUser: boolean, owner?: string }} options `showUser` adds the
+ *   wearer column (the developer view); `owner` names whose records these are
+ *   when there is only one wearer in them.
+ */
+export function renderRecords(body, rows, { showUser, owner = '' }) {
   if (rows.length === 0) {
     body.replaceChildren(h('p', {
       class: 'empty-note',
-      text: 'Nothing recorded on this device yet. Readings are stored once a wearer has calibrated and worn the band.',
+      text: showUser
+        ? 'Nothing recorded on this device yet. Readings are stored once a wearer has calibrated and worn the band.'
+        : 'Nothing recorded for you yet. Readings are stored once you have calibrated and worn the band.',
     }));
     return;
   }
 
   let shown = PAGE_SIZE;
-  const table = h('div', { class: 'records-table' });
+  const table = h('div', { class: showUser ? 'records-table' : 'records-table records-table--own' });
   const more = h('button', { type: 'button', class: 'pill-button pill-button--ghost' });
 
   function draw() {
@@ -119,12 +97,13 @@ async function showRecords(body) {
     const page = rows.slice(0, shown);
     table.replaceChildren(
       h('div', { class: 'records-row records-row--head' }, [
-        h('span', { text: 'User' }), h('span', { text: 'Date' }),
+        showUser ? h('span', { text: 'User' }) : null,
+        h('span', { text: 'Date' }),
         h('span', { text: 'Time' }), h('span', { text: 'Angle' }),
         h('span', { text: 'Quality' }),
       ]),
       ...page.map((row) => h('div', { class: 'records-row' }, [
-        h('span', { text: row.user }),
+        showUser ? h('span', { text: row.user }) : null,
         h('span', { text: row.date }),
         h('span', { text: row.time }),
         h('span', { text: `${row.angle}°` }),
@@ -149,16 +128,22 @@ async function showRecords(body) {
     );
   };
 
+  const wearers = countUsers(rows);
+  const summary = showUser
+    ? `${rows.length} readings from ${wearers} wearer${wearers === 1 ? '' : 's'}, newest first.`
+    : `${rows.length} of your readings, newest first.`;
+  const exportOptions = { showUser, owner };
+
   body.replaceChildren(
-    h('p', { class: 'section-detail', text: `${rows.length} readings from ${countUsers(rows)} wearer${countUsers(rows) === 1 ? '' : 's'}, newest first.` }),
+    h('p', { class: 'section-detail', text: summary }),
     h('div', { class: 'button-pair' }, [
       h('button', {
         type: 'button', class: 'pill-button', text: 'Download CSV',
-        onClick: () => downloadCSV(rows, say),
+        onClick: () => downloadCSV(rows, say, exportOptions),
       }),
       h('button', {
         type: 'button', class: 'pill-button pill-button--ghost', text: 'Download PDF',
-        onClick: () => downloadPDF(rows, say),
+        onClick: () => downloadPDF(rows, say, exportOptions),
       }),
     ]),
     outcome,
@@ -173,9 +158,8 @@ async function showRecords(body) {
   );
 }
 
-/** Every wearer's samples, flattened and sorted newest first. */
-async function collectRows() {
-  const profiles = listProfiles();
+/** The given wearers' samples, flattened and sorted newest first. */
+export async function collectRows(profiles = listProfiles()) {
   const rows = [];
 
   for (const profile of profiles) {
@@ -183,6 +167,7 @@ async function collectRows() {
     for (const sample of samples) {
       rows.push({
         user: profile.name,
+        profileId: profile.id,
         at: sample.date.getTime(),
         date: isoDate(sample.date),
         time: clockTime(sample.date),
@@ -200,19 +185,26 @@ function countUsers(rows) {
   return new Set(rows.map((row) => row.user)).size;
 }
 
-function downloadCSV(rows, say) {
+/** `align-records-2026-11-03.csv`, or `align-records-sam-2026-11-03.csv` for one wearer. */
+function exportName(owner, extension) {
+  const slug = owner.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `align-records-${slug ? `${slug}-` : ''}${isoDate(new Date())}.${extension}`;
+}
+
+function downloadCSV(rows, say, { showUser, owner }) {
   const escape = (value) => {
     const text = String(value);
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
+  const cells = (row) => [row.date, row.time, row.angle, row.quality];
   const lines = [
-    ['User', 'Date', 'Time', 'Angle', 'Quality'].join(','),
-    ...rows.map((row) => [row.user, row.date, row.time, row.angle, row.quality].map(escape).join(',')),
+    [...(showUser ? ['User'] : []), 'Date', 'Time', 'Angle', 'Quality'].join(','),
+    ...rows.map((row) => [...(showUser ? [row.user] : []), ...cells(row)].map(escape).join(',')),
   ];
 
   return deliver(
     new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }),
-    `align-records-${isoDate(new Date())}.csv`,
+    exportName(showUser ? '' : owner, 'csv'),
     say,
   );
 }
@@ -225,33 +217,39 @@ function downloadCSV(rows, say) {
  * and the quality column keeps its colour so the printout can be skimmed the
  * way the screen is.
  */
-function downloadPDF(rows, say) {
+function downloadPDF(rows, say, { showUser, owner }) {
   const wearers = countUsers(rows);
   const span = rows.length > 0
     ? `${rows[rows.length - 1].date} to ${rows[0].date}`
     : 'no readings';
+  const who = showUser
+    ? `from ${wearers} wearer${wearers === 1 ? '' : 's'}`
+    : `for ${owner}`;
+
+  const columns = [
+    ...(showUser ? [{ label: 'Wearer', width: 150 }] : []),
+    { label: 'Date', width: 90 },
+    { label: 'Time', width: 80 },
+    { label: 'Angle', width: 65, align: 'right' },
+    { label: 'Quality', width: 90 },
+  ];
+  const qualityColumn = columns.length - 1;
 
   const blob = tableToPDF({
-    title: 'ALIGN posture records',
-    subtitle: `${rows.length} reading${rows.length === 1 ? '' : 's'} from `
-      + `${wearers} wearer${wearers === 1 ? '' : 's'}, ${span}. `
+    title: showUser ? 'ALIGN posture records' : `ALIGN posture records — ${owner}`,
+    subtitle: `${rows.length} reading${rows.length === 1 ? '' : 's'} ${who}, ${span}. `
       + `Exported ${isoDate(new Date())} at ${clockTime(new Date())}, newest first.`,
     footnote: 'Recorded on one device. Angles are degrees off that wearer\u2019s calibrated upright.',
-    columns: [
-      { label: 'Wearer', width: 150 },
-      { label: 'Date', width: 90 },
-      { label: 'Time', width: 80 },
-      { label: 'Angle', width: 65, align: 'right' },
-      { label: 'Quality', width: 90 },
-    ],
+    columns,
     rows: rows.map((row) => [
-      row.user, row.date, row.time, `${row.angle.toFixed(1)}\u00B0`, row.quality,
+      ...(showUser ? [row.user] : []),
+      row.date, row.time, `${row.angle.toFixed(1)}\u00B0`, row.quality,
     ]),
-    // Column 4 is Quality; every other cell stays the default ink.
-    colourFor: (row, column) => (column === 4 ? QUALITY_COLOURS[row[4]] ?? null : null),
+    // Only the Quality cell is coloured; every other cell stays the default ink.
+    colourFor: (row, column) => (column === qualityColumn ? QUALITY_COLOURS[row[qualityColumn]] ?? null : null),
   });
 
-  return deliver(blob, `align-records-${isoDate(new Date())}.pdf`, say);
+  return deliver(blob, exportName(showUser ? '' : owner, 'pdf'), say);
 }
 
 /**
