@@ -14,7 +14,22 @@ import { collectRows, renderRecords, passwordMatches } from './ui/records.js';
 
 const cards = document.getElementById('cards');
 
-showPasswordPrompt();
+/**
+ * Once the password is entered, a reload keeps the page open for the rest of
+ * this tab's session instead of asking again. Closing the tab locks it.
+ */
+const UNLOCKED_KEY = 'align.developerUnlocked';
+
+if (isUnlocked()) showEverything();
+else showPasswordPrompt();
+
+function isUnlocked() {
+  try { return sessionStorage.getItem(UNLOCKED_KEY) === '1'; } catch { return false; }
+}
+
+function rememberUnlocked() {
+  try { sessionStorage.setItem(UNLOCKED_KEY, '1'); } catch { /* asks again next reload */ }
+}
 
 function showPasswordPrompt() {
   const field = h('input', {
@@ -26,6 +41,7 @@ function showPasswordPrompt() {
   async function attempt() {
     problem.textContent = '';
     if (await passwordMatches(field.value)) {
+      rememberUnlocked();
       await showEverything();
       return;
     }
@@ -39,7 +55,7 @@ function showPasswordPrompt() {
   });
 
   cards.replaceChildren(card({
-    title: 'For the developer',
+    title: 'Developer database',
     subtitle: 'Every wearer’s records on this device. Enter the developer password to continue.',
   }, [
     h('div', { class: 'endpoint-row' }, [

@@ -111,8 +111,8 @@ range.
 | Wear streak (Mon–Sun + running count) | `web/js/ui/home.js` (`createStreakCard`) |
 | Buzz adjustment (OFF / 1s / 2s / 5s) and battery | `web/js/ui/settings.js` |
 | Sign in / log out, one profile per wearer | `web/js/ui/signin.js`, `web/js/stores/profile.js` |
-| Records — the signed-in wearer's own readings, CSV/PDF export | `web/js/ui/records.js` (Settings → Data → *Open records*) |
-| Developer records — every wearer on this device, password-protected | `web/developer.html`, `web/js/developer.js` (Settings → Data → *For the developer*) |
+| Records — the signed-in wearer's own readings, CSV/PDF export | `web/js/ui/records.js` (Settings → Data → *My records*) |
+| Developer records — every wearer on this device, password-protected | `web/developer.html`, `web/js/developer.js` (Settings → Data → *Developer database*) |
 | Gauge, lean arc, chart, pill selector | `web/js/ui/components.js` (hand-drawn SVG) |
 
 How the numbers are derived, all in `web/js/stores/postureStore.js`:
