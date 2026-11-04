@@ -27,7 +27,7 @@
 
 /** One row per reading: who, when, how far off, and the traffic light. */
 var READINGS_SHEET = 'Readings';
-var READINGS_HEADER = ['User', 'Date', 'Time', 'Angle (°)', 'Quality'];
+var READINGS_HEADER = ['User', 'Date', 'Time', 'Angle', 'Quality'];
 
 /** One row per wearer per day, for totals rather than moments. */
 var DAILY_SHEET = 'Daily';
@@ -72,9 +72,34 @@ function doPost(e) {
   }
 }
 
-/** Lets you check the deployment is alive by opening the URL in a browser. */
+/**
+ * Lets you check the deployment is alive by opening the URL in a browser, and
+ * lays out the tabs while it is at it, so the sheet has its headings before
+ * the first reading arrives instead of sitting blank.
+ */
 function doGet() {
+  setup();
   return json({ ok: true, message: 'ALIGN sheet endpoint is running.' });
+}
+
+/**
+ * Creates the Readings and Daily tabs with their headings. Safe to run any
+ * number of times: tabs and headings that already exist are left alone.
+ *
+ * A new spreadsheet's empty "Sheet1" is renamed to Readings rather than left
+ * beside it, so the readings are what you see when the file opens.
+ */
+function setup() {
+  var book = SpreadsheetApp.getActiveSpreadsheet();
+  if (!book.getSheetByName(READINGS_SHEET)) {
+    var sheets = book.getSheets();
+    if (sheets.length === 1 && sheets[0].getLastRow() === 0) {
+      sheets[0].setName(READINGS_SHEET);
+    }
+  }
+  sheetWithHeader(READINGS_SHEET, READINGS_HEADER);
+  sheetWithHeader(DAILY_SHEET, DAILY_HEADER);
+  book.setActiveSheet(book.getSheetByName(READINGS_SHEET));
 }
 
 /**
