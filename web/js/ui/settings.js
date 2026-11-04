@@ -42,7 +42,7 @@ export function openSettings({ device, posture, settings, sync, profile, actions
       deviceCard({ device, posture, settings, actions, close: sheet.close }),
       issuesSection(settings),
       diagnosticsCard(device),
-      dataSection(posture),
+      dataSection(posture, profile),
     ].filter(Boolean);
     body.replaceChildren(...cards);
   }
@@ -392,16 +392,22 @@ function issuesSection(settings) {
 
 // MARK: - Data
 
-function dataSection(posture) {
+function dataSection(posture, profile) {
   return h('section', { class: 'section' }, [
     h('h3', { class: 'section-title', text: 'Data' }),
     h('p', {
       class: 'section-detail',
-      text: 'Every reading this device has recorded, for every wearer.',
+      text: `Every reading recorded for ${profile.name} on this device.`,
     }),
     h('button', {
       type: 'button', class: 'pill-button', text: 'Open records',
-      onClick: () => openRecords(),
+      onClick: () => openRecords(profile),
+    }),
+    // Every wearer's records live on their own password-protected page, so
+    // the table of other people's readings is never one tap from a wearer.
+    h('button', {
+      type: 'button', class: 'pill-button pill-button--ghost', text: 'For the developer',
+      onClick: () => { window.location.href = 'developer.html'; },
     }),
     h('button', {
       type: 'button', class: 'link-button', text: 'Load demo data',

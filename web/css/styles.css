@@ -830,6 +830,8 @@ body.signed-out .topbar-actions { display: none; }
   font-variant-numeric: tabular-nums;
   border-bottom: 1px solid var(--hairline);
 }
+/* A wearer's own records have no User column. */
+.records-table--own .records-row { grid-template-columns: 1.1fr 0.9fr 0.7fr 0.9fr; }
 .records-row:last-child { border-bottom: 0; }
 .records-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -860,3 +862,26 @@ body.signed-out .topbar-actions { display: none; }
   text-decoration: underline;
   padding: 6px 0;
 }
+
+/* ---------------------------------------------------------------- developer page */
+
+/* Wider than the app: this page is a table, read on a laptop more often than
+   a phone. */
+.shell--wide { max-width: 860px; }
+.shell--wide .records-table { max-height: 70vh; }
+
+.dev-back { font-size: 13px; font-weight: 600; text-decoration: none; }
+
+.wearer-list { display: flex; flex-direction: column; gap: 8px; }
+.wearer-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.wearer-row-name { font-weight: 700; color: var(--green); }
+.wearer-row-count { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.wearer-row-detail { grid-column: 1 / -1; color: var(--ink-muted); font-size: 12px; }
