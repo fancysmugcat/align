@@ -25,7 +25,11 @@
  * or the old code keeps serving.
  */
 
-/** One row per reading: who, when, how far off, and the traffic light. */
+/**
+ * One row per reading: who, when, how far off, and the traffic light. Each
+ * wearer gets a tab of their own, named after them; this is the single shared
+ * tab earlier versions wrote everyone into, which setup() splits up.
+ */
 var READINGS_SHEET = 'Readings';
 var READINGS_HEADER = ['User', 'Date', 'Time', 'Angle', 'Quality'];
 
@@ -83,23 +87,79 @@ function doGet() {
 }
 
 /**
- * Creates the Readings and Daily tabs with their headings. Safe to run any
- * number of times: tabs and headings that already exist are left alone.
+ * Creates the Daily tab, and splits the old shared Readings tab into one tab
+ * per wearer if it is still there. Safe to run any number of times.
  *
- * A new spreadsheet's empty "Sheet1" is renamed to Readings rather than left
- * beside it, so the readings are what you see when the file opens.
+ * Run it once from the editor (pick "setup" beside Run) after pasting this
+ * version in; that is what moves the readings already in the sheet.
  */
 function setup() {
+  sheetWithHeader(DAILY_SHEET, DAILY_HEADER);
+  splitReadingsByUser();
+}
+
+/**
+ * The tab a wearer's readings go in: their own name, made safe for a tab.
+ *
+ * Sheets forbids a few characters in tab names and caps their length, and a
+ * wearer called "Daily" must not land in the totals tab, so those are
+ * adjusted. The same name always maps to the same tab.
+ */
+function tabFor(name) {
+  var tab = String(name).replace(/[\[\]\*\?:\/\\]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!tab) tab = 'Unknown';
+  tab = tab.slice(0, 90);
+  var lower = tab.toLowerCase();
+  if (lower === DAILY_SHEET.toLowerCase() || lower === READINGS_SHEET.toLowerCase()) {
+    tab += ' (wearer)';
+  }
+  return tab;
+}
+
+/**
+ * Moves rows from the old shared Readings tab into each wearer's own tab,
+ * colours and duplicate-guard keys included, then removes the shared tab.
+ * Does nothing once that tab is gone, so running setup() again is harmless.
+ */
+function splitReadingsByUser() {
   var book = SpreadsheetApp.getActiveSpreadsheet();
-  if (!book.getSheetByName(READINGS_SHEET)) {
-    var sheets = book.getSheets();
-    if (sheets.length === 1 && sheets[0].getLastRow() === 0) {
-      sheets[0].setName(READINGS_SHEET);
+  var shared = book.getSheetByName(READINGS_SHEET);
+  if (!shared) return 0;
+
+  var width = READINGS_HEADER.length + 1;   // visible columns plus the key
+  var lastRow = shared.getLastRow();
+  var moved = 0;
+
+  if (lastRow > 1) {
+    var range = shared.getRange(2, 1, lastRow - 1, width);
+    var values = range.getValues();
+    var colours = shared.getRange(2, 5, lastRow - 1, 1).getBackgrounds();
+
+    var byTab = {};
+    var order = [];
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      if (!row[0]) continue;
+      var tab = tabFor(row[0]);
+      if (!byTab[tab]) { byTab[tab] = { rows: [], colours: [] }; order.push(tab); }
+      byTab[tab].rows.push(row);
+      byTab[tab].colours.push(colours[i]);
+    }
+
+    for (var j = 0; j < order.length; j++) {
+      var group = byTab[order[j]];
+      var sheet = sheetWithHeader(order[j], READINGS_HEADER);
+      var start = sheet.getLastRow() + 1;
+      sheet.getRange(start, 1, group.rows.length, width).setValues(group.rows);
+      sheet.getRange(start, 5, group.colours.length, 1).setBackgrounds(group.colours);
+      sheet.hideColumns(width);
+      moved += group.rows.length;
     }
   }
-  sheetWithHeader(READINGS_SHEET, READINGS_HEADER);
-  sheetWithHeader(DAILY_SHEET, DAILY_HEADER);
-  book.setActiveSheet(book.getSheetByName(READINGS_SHEET));
+
+  // A spreadsheet must keep at least one tab; Daily is always there by now.
+  book.deleteSheet(shared);
+  return moved;
 }
 
 /**
@@ -116,7 +176,7 @@ function writeReadings(name, readings) {
     readings = readings.slice(0, MAX_ROWS_PER_REQUEST);
   }
 
-  var sheet = sheetWithHeader(READINGS_SHEET, READINGS_HEADER);
+  var sheet = sheetWithHeader(tabFor(name), READINGS_HEADER);
   var keyColumn = READINGS_HEADER.length + 1;   // just past the visible columns
 
   var seen = {};
