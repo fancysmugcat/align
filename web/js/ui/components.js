@@ -105,6 +105,29 @@ const ARC_START = 180;    // left end of the arc
 const ARC_CENTRE = 270;   // straight up — upright, and where the knob rests
 const ARC_END = 360;      // right end
 
+/**
+ * Holds a displayed number still until it has really changed.
+ *
+ * Readings arrive ten times a second, and even smoothed they wander by a
+ * degree or two, so a number redrawn on every one never stops changing and is
+ * hard to read. This lets a new value through only once the last one has been
+ * on screen for `holdMs` and the change is at least `step`. A swing of
+ * `jump` degrees or more shows at once, so a real slouch is never held back.
+ */
+export function steadyReadout({ holdMs = 600, step = 1, jump = 10 } = {}) {
+  let shown = null;
+  let changedAt = 0;
+  return (value) => {
+    const now = performance.now();
+    const moved = shown === null ? Infinity : Math.abs(value - shown);
+    if (moved >= jump || (moved >= step && now - changedAt >= holdMs)) {
+      shown = value;
+      changedAt = now;
+    }
+    return shown;
+  };
+}
+
 export function createPostureArc({
   width = 300, arcHeight = 92, lineWidth = 18, maxAngle = 45, showKnob = true,
   deadband = 3,
@@ -191,9 +214,11 @@ export function createPostureArc({
   let zoneNow = PostureZone.good;
   let frame = null;
 
-  // Fraction of the remaining distance closed per frame. 0.22 trailed the
-  // wearer; 0.4 chased every twitch of accelerometer noise. This sits between.
-  const EASING = 0.25;
+  // Fraction of the remaining distance closed per frame. 0.4 chased every
+  // twitch of accelerometer noise; 0.25 was still reported as too quick. At
+  // 0.12 the gauge glides to a new angle over about half a second.
+  const EASING = 0.12;
+  const steadyLabel = steadyReadout();
   /** Below this the move isn't visible, so stop rather than loop forever. */
   const SETTLED = 0.05;
 
@@ -229,7 +254,7 @@ export function createPostureArc({
     // Read per draw, not captured at build time, so changing Sensitivity takes
     // effect without rebuilding the card.
     const band = typeof deadband === 'function' ? deadband() : deadband;
-    const shown = Math.abs(shownAngle) < band ? 0 : Math.round(shownAngle);
+    const shown = steadyLabel(Math.abs(shownAngle) < band ? 0 : Math.round(shownAngle));
     label.textContent = `${shown}°`;
     label.setAttribute('fill', zoneNow.color);
     el.setAttribute('aria-label', `${shown} degrees from upright`);

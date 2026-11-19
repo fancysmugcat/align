@@ -3,7 +3,7 @@ import { PostureStore } from '../stores/postureStore.js';
 import { DeviceManager, isIOS, isIOSBluetoothBrowser, IOS_BLUETOOTH_BROWSER } from '../device.js';
 import { Theme } from '../theme.js';
 import {
-  h, card, icon, Icons, createPostureArc, silhouette, leanArc, angleChart,
+  h, card, icon, Icons, createPostureArc, silhouette, leanArc, angleChart, steadyReadout,
 } from './components.js';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -400,6 +400,7 @@ function createLeanCard(posture, getRange, settings) {
   // asking when they lean over to look at it.
   const liveLabel = h('span', { class: 'lean-live-label' });
   const liveAngle = h('span', { class: 'lean-live-angle' });
+  const steadyLiveAngle = steadyReadout();
   const marker = h('span', { class: 'lean-live-marker' });
   const live = h('div', { class: 'lean-live' }, [
     h('div', { class: 'lean-live-copy' }, [liveLabel, liveAngle]),
@@ -441,7 +442,9 @@ function createLeanCard(posture, getRange, settings) {
     liveLabel.textContent = side === LeanSide.left
       ? 'Leaning left'
       : side === LeanSide.right ? 'Leaning right' : 'Centred';
-    liveAngle.textContent = `${Math.abs(roll).toFixed(1)}°`;
+    // Whole degrees, held steady: a tenth of a degree changing ten times a
+    // second was unreadable.
+    liveAngle.textContent = `${steadyLiveAngle(Math.round(Math.abs(roll)))}°`;
 
     // Past 30 degrees the exact number stops mattering; peg the marker so it
     // can't slide out of its track.
