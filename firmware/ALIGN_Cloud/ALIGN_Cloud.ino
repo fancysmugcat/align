@@ -975,6 +975,7 @@ bool joinSavedNetwork() {
   // Some Wi-Fi 6 routers advertise WPA3; the C3 negotiates better with power
   // saving off and the minimum security floor dropped to WPA2.
   WiFi.setSleep(false);
+  lowerRadioPower();
   WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid.c_str(), pass.c_str());
@@ -987,6 +988,9 @@ bool joinSavedNetwork() {
   Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
+    // Power saving was off only to get through the handshake. Left off, the
+    // radio never rests and the chip runs hot against the wearer's back.
+    WiFi.setSleep(true);
     Serial.print("Connected. Board is at http://");
     Serial.println(WiFi.localIP());
     return true;
@@ -994,6 +998,17 @@ bool joinSavedNetwork() {
 
   Serial.println("Could not join — starting the setup hotspot instead.");
   return false;
+}
+
+/**
+ * Full transmit power (about 20 dBm) is far more than a band a few metres from
+ * the router needs, and on the ESP32-C3 Super Mini it is what makes the chip
+ * hot to the touch. 8.5 dBm is the usual remedy for that board: its antenna is
+ * so close to the regulator that full power also *worsens* reception, so this
+ * tends to make it join more reliably, not less.
+ */
+void lowerRadioPower() {
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
 }
 
 // ESP32-C3 Dev Module: give the radio time after WIFI_AP, pin channel 1
@@ -1008,6 +1023,7 @@ void startSetupPortal() {
   WiFi.mode(WIFI_AP_STA);
   delay(200);
   WiFi.setSleep(false);
+  lowerRadioPower();
 
   bool ok = WiFi.softAP(SETUP_AP_SSID, NULL, 1, 0, 4);
   IPAddress ip(192, 168, 4, 1);
