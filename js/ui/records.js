@@ -38,15 +38,24 @@ const PASSWORD_HASH = '30d58acecfaf5a4609e0ff302a91982ee3ba790e1449290f4d983763c
 /** Rows are heavy; this many at a time keeps the table usable on a phone. */
 const PAGE_SIZE = 200;
 
-/** The signed-in wearer's own readings, in a sheet over Settings. */
-export function openRecords(profile) {
+/**
+ * The signed-in wearer's own readings, in a sheet over Settings.
+ *
+ * The table reads from storage, and readings sit in memory for up to a minute
+ * before they are written there, so `posture` is saved first. Without that, a
+ * wearer who had just been measured opened their records and found nothing.
+ */
+export function openRecords(profile, posture) {
   const body = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '14px' } });
   const sheet = openSheet({ title: 'My records', closeLabel: 'Close', body });
 
   body.replaceChildren(h('p', { class: 'hint', text: 'Reading records…' }));
-  collectRows([profile]).then((rows) => {
-    renderRecords(body, rows, { showUser: false, owner: profile.name });
-  });
+  Promise.resolve(posture?.save())
+    .catch(() => {})
+    .then(() => collectRows([profile]))
+    .then((rows) => {
+      renderRecords(body, rows, { showUser: false, owner: profile.name });
+    });
   return sheet;
 }
 

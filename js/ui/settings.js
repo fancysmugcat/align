@@ -401,7 +401,7 @@ function dataSection(posture, profile) {
     }),
     h('button', {
       type: 'button', class: 'pill-button', text: 'My records',
-      onClick: () => openRecords(profile),
+      onClick: () => openRecords(profile, posture),
     }),
     // Every wearer's records live on their own password-protected page, so
     // the table of other people's readings is never one tap from a wearer.
