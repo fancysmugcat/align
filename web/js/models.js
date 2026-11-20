@@ -93,6 +93,9 @@ export function leanFor(roll, threshold = LEAN_THRESHOLD) {
  * rounds of "too slow" and "too sensitive", so they are a setting instead.
  *
  * `smoothing` is the board's filter coefficient: higher is calmer and slower.
+ * The board reads ten times a second, so 0.86 settles in about a second and a
+ * half; the earlier 0.70 settled in under half a second and was reported as
+ * twitching with every breath.
  * `graceMs` is how long a lean must be held before the motor fires — it was a
  * flat three seconds, which on top of the filter meant four and a half
  * seconds between leaning and feeling anything.
@@ -115,15 +118,15 @@ export function leanFor(roll, threshold = LEAN_THRESHOLD) {
 export const SENSITIVITY = {
   calm: {
     id: 'calm', label: 'Calm',
-    smoothing: 0.82, deadband: 4, leanThreshold: 8, graceMs: 2000, intensity: 55,
+    smoothing: 0.92, deadband: 4, leanThreshold: 8, graceMs: 2000, intensity: 55,
   },
   normal: {
     id: 'normal', label: 'Normal',
-    smoothing: 0.70, deadband: 3, leanThreshold: 6, graceMs: 1000, intensity: 78,
+    smoothing: 0.86, deadband: 3, leanThreshold: 6, graceMs: 1000, intensity: 78,
   },
   quick: {
     id: 'quick', label: 'Quick',
-    smoothing: 0.55, deadband: 2, leanThreshold: 4, graceMs: 500, intensity: 100,
+    smoothing: 0.75, deadband: 2, leanThreshold: 4, graceMs: 500, intensity: 100,
   },
 };
 

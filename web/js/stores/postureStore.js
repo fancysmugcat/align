@@ -128,7 +128,9 @@ export class PostureStore {
       this.samples.push(sample);
       this.unsavedCount += 1;
       this.emitData();
-      if (this.unsavedCount >= 30) this.save();
+      // Once a minute rather than every five: anything not yet written is
+      // invisible to My records and lost if the browser is closed abruptly.
+      if (this.unsavedCount >= 6) this.save();
     }
   }
 
@@ -405,9 +407,10 @@ export class PostureStore {
 
   // MARK: - Persistence
 
+  /** @returns {Promise} resolves once the history is in storage. */
   save() {
     this.unsavedCount = 0;
-    saveSamples(this.samples.slice(), this.profileId);
+    return saveSamples(this.samples.slice(), this.profileId);
   }
 
   /** Wipes history and calibration. Used by Settings. */
